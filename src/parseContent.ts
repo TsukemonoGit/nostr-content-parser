@@ -1,4 +1,4 @@
-// 改善版 parseContent.ts
+// 修正版 parseContent.ts - URL優先対応
 import {
   NIP19_PATTERNS,
   URL_PATTERN,
@@ -39,6 +39,37 @@ function isOverlapping(
   return start1 < end2 && start2 < end1;
 }
 
+// URLを最初に処理して、その範囲を保護する
+function findUrlTokens(content: string): Token[] {
+  const urlTokens: Token[] = [];
+  const pattern = new RegExp(URL_PATTERN.source, URL_PATTERN.flags);
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(content)) !== null) {
+    const originalUrl = match[0];
+    const cleanedUrl = cleanUrlEnd(originalUrl);
+    const start = match.index;
+    const end = start + cleanedUrl.length;
+
+    urlTokens.push(createToken(TokenType.URL, cleanedUrl, start, end));
+
+    // 除去された部分をTEXTトークンとして追加
+    if (cleanedUrl !== originalUrl) {
+      const removedPart = originalUrl.slice(cleanedUrl.length);
+      urlTokens.push(
+        createToken(
+          TokenType.TEXT,
+          removedPart,
+          start + cleanedUrl.length,
+          start + originalUrl.length
+        )
+      );
+    }
+  }
+
+  return urlTokens;
+}
+
 const PATTERN_CONFIGS = [
   {
     patterns: { nip_identifier: NIP_IDENTIFIER_PATTERN },
@@ -49,23 +80,6 @@ const PATTERN_CONFIGS = [
       } catch {
         return null;
       }
-    },
-  },
-  {
-    patterns: { url: URL_PATTERN },
-    handler: (match: RegExpExecArray) => {
-      const originalUrl = match[0];
-      const cleanedUrl = cleanUrlEnd(originalUrl);
-      return {
-        type: TokenType.URL,
-        metadata: {
-          cleanedUrl,
-          removedPart:
-            cleanedUrl !== originalUrl
-              ? originalUrl.slice(cleanedUrl.length)
-              : null,
-        },
-      };
     },
   },
   {
@@ -121,7 +135,8 @@ const PATTERN_CONFIGS = [
 function processNip19Patterns(
   content: string,
   patterns: typeof NIP19_PATTERNS,
-  matches: Token[]
+  matches: Token[],
+  protectedRanges: Token[]
 ): void {
   Object.entries(patterns).forEach(([type, rawPattern]) => {
     const pattern = new RegExp(rawPattern.source, rawPattern.flags);
@@ -130,10 +145,18 @@ function processNip19Patterns(
       const [matchedContent] = match;
       const start = match.index;
       const end = start + matchedContent.length;
+
+      // 既存のマッチとの重複チェック
       const hasOverlap = matches.some((m) =>
         isOverlapping(start, end, m.start, m.end)
       );
-      if (!hasOverlap) {
+
+      // 保護された範囲（URL等）との重複チェック
+      const isInProtectedRange = protectedRanges.some((p) =>
+        isOverlapping(start, end, p.start, p.end)
+      );
+
+      if (!hasOverlap && !isInProtectedRange) {
         matches.push(
           createToken(type as TokenType, matchedContent, start, end, {
             hasNostrPrefix: matchedContent.startsWith("nostr:"),
@@ -148,7 +171,8 @@ function processNip19Patterns(
 function processPatterns(
   content: string,
   matches: Token[],
-  tags: string[][] = []
+  tags: string[][] = [],
+  protectedRanges: Token[] = []
 ): void {
   for (const config of PATTERN_CONFIGS) {
     for (const [patternType, rawPattern] of Object.entries(config.patterns)) {
@@ -157,42 +181,28 @@ function processPatterns(
       while ((match = pattern.exec(content)) !== null) {
         const start = match.index;
         const end = start + match[0].length;
+
+        // 既存のマッチとの重複チェック
         if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
           continue;
+
+        // 保護された範囲との重複チェック
+        if (
+          protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+        )
+          continue;
+
         const result = config.handler(match, patternType, tags);
         if (result) {
-          if (result.type === TokenType.URL && result.metadata?.cleanedUrl) {
-            const cleanedUrl = result.metadata.cleanedUrl as string;
-            const removedPart = result.metadata.removedPart as string;
-            matches.push(
-              createToken(
-                TokenType.URL,
-                cleanedUrl,
-                start,
-                start + cleanedUrl.length
-              )
-            );
-            if (removedPart) {
-              matches.push(
-                createToken(
-                  TokenType.TEXT,
-                  removedPart,
-                  start + cleanedUrl.length,
-                  end
-                )
-              );
-            }
-          } else {
-            matches.push(
-              createToken(
-                result.type,
-                match[0],
-                start,
-                end,
-                "metadata" in result ? result.metadata : {}
-              )
-            );
-          }
+          matches.push(
+            createToken(
+              result.type,
+              match[0],
+              start,
+              end,
+              "metadata" in result ? result.metadata : {}
+            )
+          );
         }
       }
     }
@@ -271,12 +281,24 @@ export function parseContent(
 ): Token[] {
   if (!content) return [];
   const { includeNostrPrefixOnly = true } = options;
-  const matches: Token[] = [];
-  processNip19Patterns(content, NIP19_PATTERNS, matches);
-  if (!includeNostrPrefixOnly)
-    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches);
-  processPatterns(content, matches, tags);
+
+  // 最初にURLを検出して保護範囲を設定
+  const urlTokens = findUrlTokens(content);
+  const matches: Token[] = [...urlTokens];
+
+  // NIP-19パターンを処理（URLの範囲を除外）
+  processNip19Patterns(content, NIP19_PATTERNS, matches, urlTokens);
+  if (!includeNostrPrefixOnly) {
+    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches, urlTokens);
+  }
+
+  // その他のパターンを処理（URLの範囲を除外）
+  processPatterns(content, matches, tags, urlTokens);
+
+  // 重複を除去
   const filteredMatches = removeOverlaps(matches);
+
+  // テキストトークンを挿入
   const tokens: Token[] = [];
   let currentPos = 0;
   for (const match of filteredMatches) {
