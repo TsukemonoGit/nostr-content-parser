@@ -3,12 +3,13 @@
 // 既存の TokenType 定義に加えて型も作成
 export const TokenType = {
   TEXT: "text",
-  NPUB: "npub",
-  NPROFILE: "nprofile",
-  NOTE: "note",
-  NEVENT: "nevent",
-  NADDR: "naddr",
-  NSEC: "nsec",
+  // NPUB: "npub",
+  // NPROFILE: "nprofile",
+  // NOTE: "note",
+  // NEVENT: "nevent",
+  // NADDR: "naddr",
+  // NSEC: "nsec",
+  NIP19: "nip19", // 統合されたNIP19タイプ
   RELAY: "relay",
   URL: "url",
   CUSTOM_EMOJI: "custom_emoji",
@@ -24,6 +25,29 @@ export const TokenType = {
 } as const;
 
 export type TokenType = (typeof TokenType)[keyof typeof TokenType];
+
+// NIP19のサブタイプ定義
+export const NIP19SubType = {
+  NPUB: "npub",
+  NPROFILE: "nprofile",
+  NOTE: "note",
+  NEVENT: "nevent",
+  NADDR: "naddr",
+  NSEC: "nsec",
+} as const;
+
+export type NIP19SubType = (typeof NIP19SubType)[keyof typeof NIP19SubType];
+
+// NIP19サブタイプマッピング
+export const NIP19_TYPE_MAP: Record<string, NIP19SubType> = {
+  [NIP19SubType.NPUB]: NIP19SubType.NPUB,
+  [NIP19SubType.NPROFILE]: NIP19SubType.NPROFILE,
+  [NIP19SubType.NOTE]: NIP19SubType.NOTE,
+  [NIP19SubType.NEVENT]: NIP19SubType.NEVENT,
+  [NIP19SubType.NADDR]: NIP19SubType.NADDR,
+  [NIP19SubType.NSEC]: NIP19SubType.NSEC,
+};
+
 export interface Token {
   type: TokenType;
   content: string;

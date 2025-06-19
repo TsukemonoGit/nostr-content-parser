@@ -19,6 +19,7 @@ import {
   findCustomEmojiMetadata,
   cleanUrlEnd,
   RELAY_URL_PATTERN,
+  NIP19_TYPE_MAP,
 } from "./patterns";
 
 function createToken(
@@ -163,7 +164,7 @@ function processNip19Patterns(
   matches: Token[],
   protectedRanges: Token[]
 ): void {
-  Object.entries(patterns).forEach(([type, rawPattern]) => {
+  Object.entries(patterns).forEach(([oldType, rawPattern]) => {
     const pattern = new RegExp(rawPattern.source, rawPattern.flags);
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(content)) !== null) {
@@ -182,8 +183,11 @@ function processNip19Patterns(
       );
 
       if (!hasOverlap && !isInProtectedRange) {
+        // NIP19統合: subTypeをmetadataに格納
+        const subType = NIP19_TYPE_MAP[oldType] || oldType;
         matches.push(
-          createToken(type as TokenType, matchedContent, start, end, {
+          createToken(TokenType.NIP19, matchedContent, start, end, {
+            subType: subType,
             hasNostrPrefix: matchedContent.startsWith("nostr:"),
             plainNip19: matchedContent.replace(/^nostr:/, ""),
           })
@@ -237,12 +241,7 @@ function processPatterns(
 //重なったトークン同士があったとき、どちらを優先するか
 const PRIORITY: Record<TokenType, number> = {
   [TokenType.URL]: 15,
-  [TokenType.NPUB]: 10,
-  [TokenType.NPROFILE]: 10,
-  [TokenType.NOTE]: 10,
-  [TokenType.NEVENT]: 10,
-  [TokenType.NADDR]: 10,
-  [TokenType.NSEC]: 10,
+  [TokenType.NIP19]: 10,
 
   [TokenType.RELAY]: 10,
   [TokenType.CASHU_TOKEN]: 2,
@@ -367,17 +366,6 @@ export function filterTokensBy(
   predicate: (token: Token) => boolean
 ): Token[] {
   return tokens.filter(predicate);
-}
-
-export function getNip19Entities(tokens: Token[]): Token[] {
-  return filterTokens(tokens, [
-    TokenType.NPUB,
-    TokenType.NPROFILE,
-    TokenType.NOTE,
-    TokenType.NEVENT,
-    TokenType.NADDR,
-    TokenType.NSEC,
-  ]);
 }
 
 export function getNipIdentifiers(tokens: Token[]): Token[] {
