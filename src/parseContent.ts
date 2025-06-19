@@ -1,3 +1,4 @@
+// 改善版 parseContent.ts
 import {
   NIP19_PATTERNS,
   URL_PATTERN,
@@ -19,9 +20,6 @@ import {
   cleanUrlEnd,
 } from "./patterns";
 
-/**
- * Create a token object
- */
 function createToken(
   type: TokenType,
   content: string,
@@ -29,18 +27,9 @@ function createToken(
   end: number,
   metadata: Record<string, unknown> = {}
 ): Token {
-  return {
-    type,
-    content,
-    start,
-    end,
-    metadata,
-  };
+  return { type, content, start, end, metadata };
 }
 
-/**
- * Check if two ranges overlap
- */
 function isOverlapping(
   start1: number,
   end1: number,
@@ -50,28 +39,15 @@ function isOverlapping(
   return start1 < end2 && start2 < end1;
 }
 
-/**
- * Pattern matching configurations
- */
-const PATTERN_CONFIGS: {
-  patterns: { [key: string]: RegExp };
-  handler: (
-    match: RegExpExecArray,
-    type: string,
-    tags: string[][]
-  ) => { type: TokenType; metadata?: Record<string, unknown> } | null;
-}[] = [
+const PATTERN_CONFIGS = [
   {
     patterns: { nip_identifier: NIP_IDENTIFIER_PATTERN },
     handler: (match: RegExpExecArray, type: string) => {
       try {
         const nipInfo = parseNipIdentifier(match[0]);
-        return {
-          type: TokenType.NIP_IDENTIFIER,
-          metadata: nipInfo,
-        };
+        return { type: TokenType.NIP_IDENTIFIER, metadata: nipInfo };
       } catch {
-        return null; // Skip invalid NIP identifiers
+        return null;
       }
     },
   },
@@ -80,11 +56,10 @@ const PATTERN_CONFIGS: {
     handler: (match: RegExpExecArray) => {
       const originalUrl = match[0];
       const cleanedUrl = cleanUrlEnd(originalUrl);
-
       return {
         type: TokenType.URL,
         metadata: {
-          cleanedUrl: cleanedUrl,
+          cleanedUrl,
           removedPart:
             cleanedUrl !== originalUrl
               ? originalUrl.slice(cleanedUrl.length)
@@ -143,190 +118,191 @@ const PATTERN_CONFIGS: {
   },
 ];
 
-/**
- * Process NIP-19 patterns with prefix handling
- */
 function processNip19Patterns(
   content: string,
   patterns: typeof NIP19_PATTERNS,
   matches: Token[]
 ): void {
-  Object.entries(patterns).forEach(([type, pattern]) => {
-    pattern.lastIndex = 0;
+  Object.entries(patterns).forEach(([type, rawPattern]) => {
+    const pattern = new RegExp(rawPattern.source, rawPattern.flags);
     let match: RegExpExecArray | null;
-
     while ((match = pattern.exec(content)) !== null) {
-      const matchedContent = match[0];
+      const [matchedContent] = match;
       const start = match.index;
       const end = start + matchedContent.length;
-
-      // Check for overlap with existing matches
-      const hasOverlap = matches.some((existing) =>
-        isOverlapping(start, end, existing.start, existing.end)
+      const hasOverlap = matches.some((m) =>
+        isOverlapping(start, end, m.start, m.end)
       );
-
       if (!hasOverlap) {
-        matches.push({
-          type: type as TokenType,
-          content: matchedContent,
-          start,
-          end,
-          metadata: {
+        matches.push(
+          createToken(type as TokenType, matchedContent, start, end, {
             hasNostrPrefix: matchedContent.startsWith("nostr:"),
-            plainNip19: matchedContent.startsWith("nostr:")
-              ? matchedContent.slice(6)
-              : matchedContent,
-          },
-        });
+            plainNip19: matchedContent.replace(/^nostr:/, ""),
+          })
+        );
       }
     }
   });
 }
 
-/**
- * Process regular patterns
- */
 function processPatterns(
   content: string,
   matches: Token[],
   tags: string[][] = []
 ): void {
   for (const config of PATTERN_CONFIGS) {
-    Object.entries(config.patterns).forEach(([patternType, pattern]) => {
-      pattern.lastIndex = 0;
+    for (const [patternType, rawPattern] of Object.entries(config.patterns)) {
+      const pattern = new RegExp(rawPattern.source, rawPattern.flags);
       let match: RegExpExecArray | null;
-
       while ((match = pattern.exec(content)) !== null) {
         const start = match.index;
-        let end = start + match[0].length;
-        let matchContent = match[0];
-
-        // Check for overlap with existing matches
-        const hasOverlap = matches.some((existing) =>
-          isOverlapping(start, end, existing.start, existing.end)
-        );
-
-        if (!hasOverlap) {
-          const result = config.handler(match, patternType, tags);
-          if (result) {
-            // URLの場合の特別処理
-            if (result.type === TokenType.URL && result.metadata?.cleanedUrl) {
-              const cleanedUrl = result.metadata.cleanedUrl as string;
-              const removedPart = result.metadata.removedPart as string;
-
-              // クリーンなURLトークンを追加
-              matches.push({
-                type: TokenType.URL,
-                content: cleanedUrl,
+        const end = start + match[0].length;
+        if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+          continue;
+        const result = config.handler(match, patternType, tags);
+        if (result) {
+          if (result.type === TokenType.URL && result.metadata?.cleanedUrl) {
+            const cleanedUrl = result.metadata.cleanedUrl as string;
+            const removedPart = result.metadata.removedPart as string;
+            matches.push(
+              createToken(
+                TokenType.URL,
+                cleanedUrl,
                 start,
-                end: start + cleanedUrl.length,
-                metadata: {},
-              });
-
-              // 削除された部分があればTEXTトークンとして追加
-              if (removedPart) {
-                matches.push(
-                  createToken(
-                    TokenType.TEXT,
-                    removedPart,
-                    start + cleanedUrl.length,
-                    start + match[0].length
-                  )
-                );
-              }
-            } else {
-              // その他のトークンはそのまま追加
-              matches.push({
-                type: result.type,
-                content: match[0],
+                start + cleanedUrl.length
+              )
+            );
+            if (removedPart) {
+              matches.push(
+                createToken(
+                  TokenType.TEXT,
+                  removedPart,
+                  start + cleanedUrl.length,
+                  end
+                )
+              );
+            }
+          } else {
+            matches.push(
+              createToken(
+                result.type,
+                match[0],
                 start,
                 end,
-                metadata: result.metadata || {},
-              });
-            }
+                "metadata" in result ? result.metadata : {}
+              )
+            );
           }
         }
       }
-    });
+    }
   }
 }
 
-/**
- * Remove overlapping matches, keeping the first occurrence
- */
-function removeOverlaps(matches: Token[]): Token[] {
-  const sorted = [...matches].sort((a, b) => a.start - b.start);
-  const filtered: Token[] = [];
-  let lastEnd = 0;
+//重なったトークン同士があったとき、どちらを優先するか
+const PRIORITY: Record<TokenType, number> = {
+  [TokenType.NPUB]: 10,
+  [TokenType.NPROFILE]: 10,
+  [TokenType.NOTE]: 10,
+  [TokenType.NEVENT]: 10,
+  [TokenType.NADDR]: 10,
+  [TokenType.NSEC]: 10,
+  [TokenType.URL]: 5,
+  [TokenType.TEXT]: 0,
+  [TokenType.HASHTAG]: 0,
+  [TokenType.CUSTOM_EMOJI]: 0,
+  [TokenType.EMAIL]: 0,
+  [TokenType.CASHU_TOKEN]: 0,
+  [TokenType.LNBC]: 0,
+  [TokenType.LN_URL]: 0,
+  [TokenType.NIP_IDENTIFIER]: 0,
+  [TokenType.MENTION]: 0,
+  [TokenType.LN_ADDRESS]: 0,
+  [TokenType.BITCOIN_ADDRESS]: 0,
+};
 
-  for (const match of sorted) {
-    if (match.start >= lastEnd) {
-      filtered.push(match);
-      lastEnd = match.end;
+function removeOverlaps(matches: Token[]): Token[] {
+  const sorted = [...matches].sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    if (a.end !== b.end) return b.end - a.end; // 長い方を先に
+    return (PRIORITY[b.type] ?? 0) - (PRIORITY[a.type] ?? 0);
+  });
+
+  const result: Token[] = [];
+
+  for (const token of sorted) {
+    const overlapIndex = result.findIndex((t) =>
+      isOverlapping(t.start, t.end, token.start, token.end)
+    );
+
+    if (overlapIndex === -1) {
+      result.push(token);
+    } else {
+      const existing = result[overlapIndex];
+
+      const tokenPriority = PRIORITY[token.type] ?? 0;
+      const existingPriority = PRIORITY[existing.type] ?? 0;
+
+      // 同じ位置でも「より外側のトークンを優先」
+      const tokenLength = token.end - token.start;
+      const existingLength = existing.end - existing.start;
+
+      const shouldReplace =
+        tokenPriority > existingPriority ||
+        (tokenPriority === existingPriority && tokenLength > existingLength);
+
+      if (shouldReplace) {
+        result.splice(overlapIndex, 1, token);
+      }
+      // else: skip token
     }
   }
 
-  return filtered;
+  return result.sort((a, b) => a.start - b.start); // 再整列
 }
 
-/**
- * Parse content into tokens
- */
 export function parseContent(
   content: string,
   tags: string[][] = [],
   options: { includeNostrPrefixOnly?: boolean } = {}
 ): Token[] {
   if (!content) return [];
-
   const { includeNostrPrefixOnly = true } = options;
   const matches: Token[] = [];
-
-  // Process NIP-19 patterns with prefix handling
   processNip19Patterns(content, NIP19_PATTERNS, matches);
-
-  if (!includeNostrPrefixOnly) {
+  if (!includeNostrPrefixOnly)
     processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches);
-  }
-
-  // Process other patterns
   processPatterns(content, matches, tags);
-
-  // Remove overlapping matches
   const filteredMatches = removeOverlaps(matches);
-
-  // Create tokens with text segments
   const tokens: Token[] = [];
   let currentPos = 0;
-
   for (const match of filteredMatches) {
-    // Add text before the match
     if (match.start > currentPos) {
-      const textContent = content.slice(currentPos, match.start);
       tokens.push(
-        createToken(TokenType.TEXT, textContent, currentPos, match.start)
+        createToken(
+          TokenType.TEXT,
+          content.slice(currentPos, match.start),
+          currentPos,
+          match.start
+        )
       );
     }
-
-    // Add the match token
     tokens.push(match);
     currentPos = match.end;
   }
-
-  // Add remaining text
   if (currentPos < content.length) {
-    const textContent = content.slice(currentPos);
     tokens.push(
-      createToken(TokenType.TEXT, textContent, currentPos, content.length)
+      createToken(
+        TokenType.TEXT,
+        content.slice(currentPos),
+        currentPos,
+        content.length
+      )
     );
   }
-
   return tokens;
 }
 
-/**
- * Filter tokens by type(s)
- */
 export function filterTokens<T extends TokenType>(
   tokens: Token[],
   types: T | T[]
@@ -335,9 +311,13 @@ export function filterTokens<T extends TokenType>(
   return tokens.filter((token) => typeSet.has(token.type as T));
 }
 
-/**
- * Get all NIP-19 entities from tokens
- */
+export function filterTokensBy(
+  tokens: Token[],
+  predicate: (token: Token) => boolean
+): Token[] {
+  return tokens.filter(predicate);
+}
+
 export function getNip19Entities(tokens: Token[]): Token[] {
   return filterTokens(tokens, [
     TokenType.NPUB,
@@ -349,79 +329,46 @@ export function getNip19Entities(tokens: Token[]): Token[] {
   ]);
 }
 
-/**
- * Get all NIP identifiers from tokens
- */
 export function getNipIdentifiers(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.NIP_IDENTIFIER);
 }
 
-/**
- * Get all URLs from tokens
- */
 export function getUrls(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.URL);
 }
 
-/**
- * Get all custom emojis from tokens
- */
 export function getCustomEmojis(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.CUSTOM_EMOJI);
 }
 
-/**
- * Get all hashtags from tokens
- */
 export function getHashtags(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.HASHTAG);
 }
 
-/**
- * Get all Lightning addresses from tokens
- */
 export function getLightningAddresses(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.LN_ADDRESS);
 }
 
-/**
- * Get all Lightning URLs from tokens
- */
 export function getLightningUrls(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.LN_URL);
 }
 
-/**
- * Get all Lightning invoices from tokens
- */
 export function getLightningInvoices(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.LNBC);
 }
 
-/**
- * Get all Bitcoin addresses from tokens
- */
 export function getBitcoinAddresses(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.BITCOIN_ADDRESS);
 }
 
-/**
- * Get all Cashu tokens from tokens
- */
 export function getCashuTokens(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.CASHU_TOKEN);
 }
 
-/**
- * Get all emails from tokens
- */
 export function getEmails(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.EMAIL);
 }
 
-/**
- * Reset regex global state
- */
 export function resetPatterns(): void {
   const allPatterns = [
     ...Object.values(NIP19_PATTERNS),
@@ -437,8 +384,5 @@ export function resetPatterns(): void {
     HASHTAG_PATTERN,
     NIP_IDENTIFIER_PATTERN,
   ];
-
-  allPatterns.forEach((pattern) => {
-    pattern.lastIndex = 0;
-  });
+  allPatterns.forEach((pattern) => (pattern.lastIndex = 0));
 }

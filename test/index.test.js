@@ -419,4 +419,23 @@ describe('Lightning and Bitcoin parsing', () => {
     expect(cashuTokens).toHaveLength(1);
     expect(cashuTokens[0].content).toContain('cashuAeyJ0b2tlbiI6W3sicHJvb2ZzIjpbeyJpZCI6IjAwOWExZjI5MzI1M2U0MWUiLCJhbW91bnQiOjIsInNlY3JldCI6IjQwNzkxNWJjMjEyYmUxMDFkZDMxMzA5MzMxNGU3MzQ0MjA2MzQyM2VhNGU5NzY5ZGE3NTg1NzM5NjA2NzQyYWIiLCJDIjoiMDJiYzkwOTc5OTdkODFhZmIyY2MxNDAzNGUyNzNhNzEyZDUzMDJlMTU1MGI5OWY0NzI0YjA4OWQxNzNhZGU3OGZjIn1dLCJtaW50IjoiaHR0cHM6Ly9taW50LXRlc3QuZXhhbXBsZS5jb20ifV0sIm1lbW8iOiJjYXNodSBwYXltZW50In0=');
   });
+
+   it('should prioritize URL over inner npub when overlapping', () => {
+    const innerNpub = 'npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
+    const content = `Check this link: https://example.com/${innerNpub} end.`;
+    const tokens = parseContent(content);
+
+    // 出力確認（任意）
+    console.log(tokens);
+
+    // 最初のURLトークンが存在し、npubは無視される
+    const urlTokens = tokens.filter(t => t.type === TokenType.URL);
+    const npubTokens = tokens.filter(t => t.type === TokenType.NPUB);
+
+    expect(urlTokens).toHaveLength(1);
+    expect(urlTokens[0].content).toBe(`https://example.com/${innerNpub}`);
+
+    // npubは含まれない
+    expect(npubTokens).toHaveLength(0);
+  });
 });
