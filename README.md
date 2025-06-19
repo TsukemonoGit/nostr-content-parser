@@ -5,7 +5,7 @@ Parse Nostr content into structured tokens.
 ## Installation
 
 ```bash
-npm install nostr-content-parser
+npm install @konemono/nostr-content-parser
 ```
 
 ## Usage

@@ -1,6 +1,6 @@
 {
-  "name": "nostr-content-parser",
-  "version": "1.0.0",
+  "name": "@konemono/nostr-content-parser",
+  "version": "0.1.0",
   "description": "Parse Nostr content into tokens",
   "main": "src/index.js",
   "type": "module",
