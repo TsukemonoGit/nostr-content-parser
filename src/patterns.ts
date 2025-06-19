@@ -14,7 +14,7 @@ export const TokenType = {
   URL: "url",
   CUSTOM_EMOJI: "custom_emoji",
   HASHTAG: "hashtag",
-  MENTION: "mention",
+
   LN_ADDRESS: "ln_address",
   LN_URL: "ln_url",
   LNBC: "lnbc",
@@ -22,6 +22,7 @@ export const TokenType = {
   CASHU_TOKEN: "cashu_token",
   BITCOIN_ADDRESS: "bitcoin_address",
   NIP_IDENTIFIER: "nip_identifier",
+  LEGACY_REFERENCE: "legacy_reference", // 旧タイプ引用 #[3]
 } as const;
 
 export type TokenType = (typeof TokenType)[keyof typeof TokenType];
@@ -113,6 +114,8 @@ export const CUSTOM_EMOJI_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
 export const HASHTAG_PATTERN = /#[^\s#]+/g;
 // WebSocket Relay URL パターン
 export const RELAY_URL_PATTERN = /wss?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+// 旧タイプ引用パターン #[数字]
+export const LEGACY_REFERENCE_PATTERN = /#\[\d+\]/g;
 
 export const BITCOIN_ADDRESS_PATTERNS = {
   legacy: /\b1[1-9A-HJ-NP-Za-km-z]{25,34}\b/g,
@@ -182,3 +185,49 @@ const cleanUrlEnd = (url: string): string => {
 
   return cleanedUrl;
 };
+
+// 旧タイプ引用のメタデータを取得する関数
+export function findLegacyReferenceMetadata(
+  referenceMatch: string,
+  tags: string[][]
+): {
+  tagIndex: number;
+  tagType?: string;
+  referenceId?: string;
+  referenceType?: "npub" | "note" | "naddr" | "unknown";
+} | null {
+  // #[3] から数字部分を抽出
+  const indexMatch = referenceMatch.match(/#\[(\d+)\]/);
+  if (!indexMatch) return null;
+
+  const tagIndex = parseInt(indexMatch[1], 10);
+
+  if (!tags || tagIndex >= tags.length) {
+    return { tagIndex };
+  }
+
+  const tag = tags[tagIndex];
+  if (!tag || tag.length < 2) {
+    return { tagIndex };
+  }
+
+  const tagType = tag[0];
+  const referenceId = tag[1];
+
+  // tagTypeに基づいて参照タイプを判定
+  let referenceType: "npub" | "note" | "naddr" | "unknown" = "unknown";
+  if (tagType === "p") {
+    referenceType = "npub";
+  } else if (tagType === "e") {
+    referenceType = "note";
+  } else if (tagType === "a") {
+    referenceType = "naddr";
+  }
+
+  return {
+    tagIndex,
+    tagType,
+    referenceId,
+    referenceType,
+  };
+}

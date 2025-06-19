@@ -21,6 +21,8 @@ import {
   RELAY_URL_PATTERN,
   NIP19_TYPE_MAP,
   NIP19SubType,
+  LEGACY_REFERENCE_PATTERN,
+  findLegacyReferenceMetadata,
 } from "./patterns";
 
 function createToken(
@@ -115,6 +117,16 @@ const PATTERN_CONFIGS = [
       } catch {
         return null;
       }
+    },
+  },
+  {
+    patterns: { legacy_reference: LEGACY_REFERENCE_PATTERN },
+    handler: (match: RegExpExecArray, type: string, tags: string[][]) => {
+      const metadata = findLegacyReferenceMetadata(match[0], tags);
+      return {
+        type: TokenType.LEGACY_REFERENCE,
+        metadata: metadata || { tagIndex: -1 },
+      };
     },
   },
   {
@@ -278,10 +290,11 @@ const PRIORITY: Record<TokenType, number> = {
   [TokenType.CUSTOM_EMOJI]: 1,
   [TokenType.BITCOIN_ADDRESS]: 1,
   [TokenType.EMAIL]: 1,
+  [TokenType.LEGACY_REFERENCE]: 1,
 
   [TokenType.HASHTAG]: 0,
   [TokenType.NIP_IDENTIFIER]: 0,
-  [TokenType.MENTION]: 0,
+
   [TokenType.TEXT]: 0,
 };
 
@@ -441,6 +454,10 @@ export function getNsecs(tokens: Token[]): Token[] {
 export function getNipIdentifiers(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.NIP_IDENTIFIER);
 }
+// 旧タイプ引用を取得する関数
+export function getLegacyReferences(tokens: Token[]): Token[] {
+  return filterTokens(tokens, TokenType.LEGACY_REFERENCE);
+}
 
 export function getUrls(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.URL);
@@ -493,6 +510,7 @@ export function resetPatterns(): void {
     CUSTOM_EMOJI_PATTERN,
     HASHTAG_PATTERN,
     NIP_IDENTIFIER_PATTERN,
+    LEGACY_REFERENCE_PATTERN,
   ];
   allPatterns.forEach((pattern) => (pattern.lastIndex = 0));
 }

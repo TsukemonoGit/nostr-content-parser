@@ -1,6 +1,6 @@
 {
   "name": "@konemono/nostr-content-parser",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Parse Nostr content into tokens",
   "repository": {
     "type": "git",
