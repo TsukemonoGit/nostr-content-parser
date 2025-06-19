@@ -9,6 +9,7 @@ export const TokenType = {
   NEVENT: "nevent",
   NADDR: "naddr",
   NSEC: "nsec",
+  RELAY: "relay",
   URL: "url",
   CUSTOM_EMOJI: "custom_emoji",
   HASHTAG: "hashtag",
@@ -86,6 +87,8 @@ export const CASHU_TOKEN_PATTERN = /cashuA[A-Za-z0-9_-]+=*/g;
 export const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 export const CUSTOM_EMOJI_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
 export const HASHTAG_PATTERN = /#[^\s#]+/g;
+// WebSocket Relay URL パターン
+export const RELAY_URL_PATTERN = /wss?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
 
 export const BITCOIN_ADDRESS_PATTERNS = {
   legacy: /\b1[1-9A-HJ-NP-Za-km-z]{25,34}\b/g,

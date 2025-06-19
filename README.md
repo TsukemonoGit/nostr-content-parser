@@ -29,7 +29,6 @@ console.log(tokens);
 - `getUrls(tokens)` - Get URLs
 - `getCustomEmojis(tokens)` - Get custom emojis
 - `getHashtags(tokens)` - Get hashtags
-- `getMentions(tokens)` - Get mentions
 
 ## 6. 実行コマンド
 

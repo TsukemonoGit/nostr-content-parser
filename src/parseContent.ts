@@ -18,6 +18,7 @@ import {
   isLightningAddress,
   findCustomEmojiMetadata,
   cleanUrlEnd,
+  RELAY_URL_PATTERN,
 } from "./patterns";
 
 function createToken(
@@ -50,8 +51,15 @@ function findUrlTokens(content: string): Token[] {
     const cleanedUrl = cleanUrlEnd(originalUrl);
     const start = match.index;
     const end = start + cleanedUrl.length;
+    const scheme = cleanedUrl.startsWith("https://")
+      ? "https"
+      : cleanedUrl.startsWith("http://")
+      ? "http"
+      : null;
 
-    urlTokens.push(createToken(TokenType.URL, cleanedUrl, start, end));
+    urlTokens.push(
+      createToken(TokenType.URL, cleanedUrl, start, end, { scheme: scheme })
+    );
 
     // 除去された部分をTEXTトークンとして追加
     if (cleanedUrl !== originalUrl) {
@@ -83,9 +91,26 @@ const PATTERN_CONFIGS = [
     },
   },
   {
+    patterns: { [TokenType.RELAY]: RELAY_URL_PATTERN },
+    handler: (match: RegExpExecArray, type: string, tags: string[][]) => {
+      const url = match[0];
+      const scheme = url.startsWith("wss://")
+        ? "wss"
+        : url.startsWith("ws://")
+        ? "ws"
+        : null;
+
+      return {
+        type: TokenType.URL,
+        metadata: scheme ? { scheme } : {},
+      };
+    },
+  },
+  {
     patterns: { ln_url: LN_URL_PATTERN },
     handler: () => ({ type: TokenType.LN_URL }),
   },
+
   {
     patterns: { lnbc: LNBC_PATTERN },
     handler: () => ({ type: TokenType.LNBC }),
@@ -219,6 +244,7 @@ const PRIORITY: Record<TokenType, number> = {
   [TokenType.NADDR]: 10,
   [TokenType.NSEC]: 10,
 
+  [TokenType.RELAY]: 10,
   [TokenType.CASHU_TOKEN]: 2,
   [TokenType.LNBC]: 2,
   [TokenType.LN_URL]: 2,
@@ -400,6 +426,7 @@ export function resetPatterns(): void {
     ...Object.values(NIP19_PLAIN_PATTERNS),
     ...Object.values(BITCOIN_ADDRESS_PATTERNS),
     URL_PATTERN,
+    RELAY_URL_PATTERN,
     LN_ADDRESS_PATTERN,
     LN_URL_PATTERN,
     LNBC_PATTERN,
