@@ -2,6 +2,10 @@
   "name": "@konemono/nostr-content-parser",
   "version": "0.1.0",
   "description": "Parse Nostr content into tokens",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TsukemonoGit/nostr-content-parser"
+  },
   "main": "src/index.js",
   "type": "module",
   "exports": {
