@@ -14,6 +14,7 @@ import {
   getCashuTokens,
   getEmails,
   resetPatterns,
+  parseContentAsync,
 } from "../src/parseContent.js";
 import { TokenType } from "../src/patterns";
 
@@ -108,7 +109,7 @@ describe("await parseContent", () => {
   });
   it("should parse plain text", async () => {
     const content = "Hello world!";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     expect(tokens).toHaveLength(1);
     expect(tokens[0].type).toBe(TokenType.TEXT);
@@ -119,7 +120,7 @@ describe("await parseContent", () => {
 
   it("should parse npub", async () => {
     const content = `Hello nostr:${TEST_NPUB} world!`;
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
     console.log(tokens);
 
     expect(tokens).toHaveLength(3);
@@ -135,7 +136,7 @@ describe("await parseContent", () => {
 
   it("should parse multiple NIP-19 entities", async () => {
     const content = `${TEST_NPUB} and ${TEST_NOTE}`;
-    const tokens = await parseContent(content, [], {
+    const tokens = parseContent(content, [], {
       includeNostrPrefixOnly: false,
     });
 
@@ -148,7 +149,7 @@ describe("await parseContent", () => {
 
   it("should parse URLs", async () => {
     const content = "Check https://example.com and http://test.org";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     expect(tokens).toHaveLength(4);
     expect(tokens[1].type).toBe(TokenType.URL);
@@ -163,7 +164,7 @@ describe("await parseContent", () => {
       ["emoji", "pepe", "https://example.com/pepe.png"],
       ["emoji", "bitcoin", "https://example.com/bitcoin.png"],
     ];
-    const tokens = await parseContent(content, tags);
+    const tokens = parseContent(content, tags);
 
     const emojiTokens = tokens.filter((t) => t.type === TokenType.CUSTOM_EMOJI);
     expect(emojiTokens).toHaveLength(2);
@@ -179,7 +180,7 @@ describe("await parseContent", () => {
 
   it("should parse custom emojis without tags", async () => {
     const content = "Hello :unknown_emoji: world";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const emojiTokens = tokens.filter((t) => t.type === TokenType.CUSTOM_EMOJI);
     expect(emojiTokens).toHaveLength(1);
@@ -189,7 +190,7 @@ describe("await parseContent", () => {
 
   it("should parse hashtags", async () => {
     const content = "Learning #nostr and #bitcoin today";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const hashtagTokens = tokens.filter((t) => t.type === TokenType.HASHTAG);
     expect(hashtagTokens).toHaveLength(2);
@@ -201,7 +202,7 @@ describe("await parseContent", () => {
 
   /* it('should parse mentions', () => {
     const content = `Mentioning nostr:${TEST_NPUB} and nostr:${TEST_NPROFILE}`;
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
     
     const mentionTokens = tokens.filter(t => t.type === TokenType.MENTION);
     expect(mentionTokens).toHaveLength(2);
@@ -218,7 +219,7 @@ describe("await parseContent", () => {
   it("should handle complex mixed content", async () => {
     const content = `Hello nostr:${TEST_NPUB}! Check this :fire: link https://example.com #nostr nostr:${TEST_NOTE}`;
     const tags = [["emoji", "fire", "https://example.com/fire.png"]];
-    const tokens = await parseContent(content, tags);
+    const tokens = parseContent(content, tags);
 
     const types = tokens.map((t) => t.type);
     expect(types).toContain(TokenType.TEXT);
@@ -230,19 +231,19 @@ describe("await parseContent", () => {
   });
 
   it("should handle empty content", async () => {
-    const tokens = await parseContent("");
+    const tokens = parseContent("");
     expect(tokens).toHaveLength(0);
   });
 
   it("should handle null content", async () => {
-    const tokens = await parseContent(null);
+    const tokens = parseContent(null);
     expect(tokens).toHaveLength(0);
   });
 
   it("should handle overlapping patterns correctly", async () => {
     // URLの中にnpubっぽい文字列がある場合など
     const content = `https://example.com/npub1test nostr:${TEST_NPUB}`;
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     expect(tokens[0].type).toBe(TokenType.URL);
     expect(tokens[0].content).toBe("https://example.com/npub1test");
@@ -330,7 +331,7 @@ describe("edge cases", () => {
 
   it("should handle consecutive same-type tokens", async () => {
     const content = `nostr:${TEST_NPUB} nostr:${TEST_NOTE}`;
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     expect(tokens).toHaveLength(3);
     expect(tokens[0].type).toBe(TokenType.NIP19);
@@ -340,7 +341,7 @@ describe("edge cases", () => {
   });
   it("should detect npub with and without nostr prefix", async () => {
     const content = `nostr:${TEST_NPUB} nostr:${TEST_NPUB}`;
-    const tokens = await parseContent(content, [], {
+    const tokens = parseContent(content, [], {
       includeNostrPrefixOnly: false,
     });
 
@@ -349,7 +350,7 @@ describe("edge cases", () => {
   });
   it("should handle tokens at start and end", async () => {
     const content = `${TEST_NPUB} middle text nostr:${TEST_NOTE}`;
-    const tokens = await parseContent(content, [], {
+    const tokens = parseContent(content, [], {
       includeNostrPrefixOnly: false,
     });
     console.log(tokens);
@@ -363,7 +364,7 @@ describe("edge cases", () => {
   it("should handle malformed NIP-19 entities", async () => {
     const content =
       "npub1short note1toolong123456789012345678901234567890123456789012345678901234567890";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     // Should treat as text since they don't match the exact pattern
     expect(tokens.every((t) => t.type === TokenType.TEXT)).toBe(true);
@@ -377,7 +378,7 @@ describe("Lightning and Bitcoin parsing", () => {
 
   it("should parse Lightning addresses", async () => {
     const content = "Send sats to alice@getalby.com and bob@wallet.com";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const lnAddresses = tokens.filter((t) => t.type === TokenType.LN_ADDRESS);
     expect(lnAddresses).toHaveLength(2);
@@ -387,7 +388,7 @@ describe("Lightning and Bitcoin parsing", () => {
 
   it("should distinguish Lightning addresses from regular emails", async () => {
     const content = "Contact alice@gmail.com or pay bob@stacker.news";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const emails = tokens.filter((t) => t.type === TokenType.EMAIL);
     const lnAddresses = tokens.filter((t) => t.type === TokenType.LN_ADDRESS);
@@ -401,7 +402,7 @@ describe("Lightning and Bitcoin parsing", () => {
   it("should parse Lightning URLs", async () => {
     const content =
       "Pay via LNURL1DP68GURN8GHJ7AMPD3KX2AR0VEEKZAR0WD5XJTNRDAKJ7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKXMMVVESKGMN5DEKXZGN5DEKXZGN5DE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HXETNDE3HX";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const lnUrls = tokens.filter((t) => t.type === TokenType.LN_URL);
     expect(lnUrls).toHaveLength(1);
@@ -413,7 +414,7 @@ describe("Lightning and Bitcoin parsing", () => {
   it("should parse Lightning invoices", async () => {
     const content =
       "Pay this invoice: lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const invoices = tokens.filter((t) => t.type === TokenType.LNBC);
     expect(invoices).toHaveLength(1);
@@ -425,7 +426,7 @@ describe("Lightning and Bitcoin parsing", () => {
   it("should parse Bitcoin addresses", async () => {
     const content =
       "Send to 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa or bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 or 3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const btcAddresses = tokens.filter(
       (t) => t.type === TokenType.BITCOIN_ADDRESS
@@ -445,7 +446,7 @@ describe("Lightning and Bitcoin parsing", () => {
   it("should parse Cashu tokens", async () => {
     const content =
       "Here is a cashu token: cashuAeyJ0b2tlbiI6W3sicHJvb2ZzIjpbeyJpZCI6IjAwOWExZjI5MzI1M2U0MWUiLCJhbW91bnQiOjIsInNlY3JldCI6IjQwNzkxNWJjMjEyYmUxMDFkZDMxMzA5MzMxNGU3MzQ0MjA2MzQyM2VhNGU5NzY5ZGE3NTg1NzM5NjA2NzQyYWIiLCJDIjoiMDJiYzkwOTc5OTdkODFhZmIyY2MxNDAzNGUyNzNhNzEyZDUzMDJlMTU1MGI5OWY0NzI0YjA4OWQxNzNhZGU3OGZjIn1dLCJtaW50IjoiaHR0cHM6Ly9taW50LXRlc3QuZXhhbXBsZS5jb20ifV0sIm1lbW8iOiJjYXNodSBwYXltZW50In0=";
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     const cashuTokens = tokens.filter((t) => t.type === TokenType.CASHU_TOKEN);
     expect(cashuTokens).toHaveLength(1);
@@ -458,7 +459,7 @@ describe("Lightning and Bitcoin parsing", () => {
     const innerNpub =
       "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
     const content = `Check this link: https://example.com/${innerNpub} end.`;
-    const tokens = await parseContent(content);
+    const tokens = parseContent(content);
 
     // 出力確認（任意）
     console.log(tokens);
@@ -476,7 +477,7 @@ describe("Lightning and Bitcoin parsing", () => {
 
   it("拡張子ベースで type を image と判定する", async () => {
     const input = "これは画像です https://example.com/image.png";
-    const tokens = await parseContent(input);
+    const tokens = parseContent(input);
 
     const urlToken = tokens.find((t) => t.type === TokenType.URL);
     expect(urlToken).toBeDefined();
@@ -495,7 +496,7 @@ describe("Lightning and Bitcoin parsing", () => {
     });
 
     const input = "https://example.com/videofile"; // 拡張子なし
-    const tokens = await parseContent(input, [], { detectUrlType: true });
+    const tokens = await parseContentAsync(input, [], { detectUrlType: true });
 
     const urlToken = tokens.find((t) => t.type === TokenType.URL);
     expect(urlToken).toBeDefined();
@@ -507,7 +508,7 @@ describe("Lightning and Bitcoin parsing", () => {
     globalThis.fetch = fetchSpy;
 
     const input = "https://example.com/unknown";
-    const tokens = await parseContent(input, [], { detectUrlType: false });
+    const tokens = parseContent(input, [], { detectUrlType: false });
 
     const urlToken = tokens.find((t) => t.type === TokenType.URL);
     expect(urlToken).toBeDefined();
