@@ -1,0 +1,157 @@
+// patterns.ts
+
+// 既存の TokenType 定義に加えて型も作成
+export const TokenType = {
+  TEXT: "text",
+  NPUB: "npub",
+  NPROFILE: "nprofile",
+  NOTE: "note",
+  NEVENT: "nevent",
+  NADDR: "naddr",
+  NSEC: "nsec",
+  URL: "url",
+  CUSTOM_EMOJI: "custom_emoji",
+  HASHTAG: "hashtag",
+  MENTION: "mention",
+  LN_ADDRESS: "ln_address",
+  LN_URL: "ln_url",
+  LNBC: "lnbc",
+  EMAIL: "email",
+  CASHU_TOKEN: "cashu_token",
+  BITCOIN_ADDRESS: "bitcoin_address",
+  NIP_IDENTIFIER: "nip_identifier",
+} as const;
+
+export type TokenType = (typeof TokenType)[keyof typeof TokenType];
+export interface Token {
+  type: TokenType;
+  content: string;
+  start: number;
+  end: number;
+  metadata?: Record<string, unknown>;
+}
+// 必要なパターンをエクスポート
+export const LN_ADDRESS_PATTERN =
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+// ヘルパー関数もエクスポート
+export function isLightningAddress(emailLike: string): boolean {
+  const commonEmailDomains = [
+    "gmail.com",
+    "yahoo.com",
+    "hotmail.com",
+    "outlook.com",
+    "icloud.com",
+    "protonmail.com",
+    "aol.com",
+    "live.com",
+  ];
+  const domain = emailLike.split("@")[1]?.toLowerCase();
+  return !!domain && !commonEmailDomains.includes(domain);
+}
+
+export function findCustomEmojiMetadata(
+  emojiName: string,
+  tags: string[][]
+): { url: string } | null {
+  if (!tags) return null;
+  const emojiTag = tags.find(
+    (tag) => tag[0] === "emoji" && tag[1] === emojiName
+  );
+  return emojiTag ? { url: emojiTag[2] } : null;
+}
+
+export const NIP19_PATTERNS = {
+  npub: /nostr:npub1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
+  nprofile: /nostr:nprofile1[023456789acdefghjklmnpqrstuvwxyz]+/g,
+  note: /nostr:note1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
+  nevent: /nostr:nevent1[023456789acdefghjklmnpqrstuvwxyz]+/g,
+  naddr: /nostr:naddr1[023456789acdefghjklmnpqrstuvwxyz]+/g,
+  nsec: /nostr:nsec1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
+} as const;
+
+export const NIP19_PLAIN_PATTERNS = {
+  npub: /(?<!nostr:)npub1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
+  nprofile: /(?<!nostr:)nprofile1[023456789acdefghjklmnpqrstuvwxyz]+/g,
+  note: /(?<!nostr:)note1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
+  nevent: /(?<!nostr:)nevent1[023456789acdefghjklmnpqrstuvwxyz]+/g,
+  naddr: /(?<!nostr:)naddr1[023456789acdefghjklmnpqrstuvwxyz]+/g,
+  nsec: /(?<!nostr:)nsec1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
+};
+
+export const URL_PATTERN = /(https?:\/\/+[^\s"'<`\]]+[^\s"'<`:\].]+)/g;
+export const LN_URL_PATTERN = /lnurl1[02-9ac-hj-np-z]+/gi;
+export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;
+export const CASHU_TOKEN_PATTERN = /cashuA[A-Za-z0-9_-]+=*/g;
+export const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+export const CUSTOM_EMOJI_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
+export const HASHTAG_PATTERN = /#[^\s#]+/g;
+
+export const BITCOIN_ADDRESS_PATTERNS = {
+  legacy: /\b1[1-9A-HJ-NP-Za-km-z]{25,34}\b/g,
+  script: /\b3[1-9A-HJ-NP-Za-km-z]{25,34}\b/g,
+  bech32: /\bbc1[02-9ac-hj-np-z]{25,87}\b/gi,
+} as const;
+
+// NIP識別子のパターン（NIP-01, NIP-C7, NIP-B0など）
+export const NIP_IDENTIFIER_PATTERN = /\bNIP-[0-9A-Za-z]+\b/g;
+
+// NIP識別子の詳細情報を取得するヘルパー関数
+export function parseNipIdentifier(nipId: string): {
+  number: string;
+  hasAlpha: boolean;
+  hasDigit: boolean;
+} {
+  const match = nipId.match(/^NIP-([0-9A-Za-z]+)$/);
+  if (!match) throw new Error("Invalid NIP identifier format");
+
+  const number = match[1];
+  const hasAlpha = /[A-Za-z]/.test(number);
+  const hasDigit = /[0-9]/.test(number);
+
+  return {
+    number,
+    hasAlpha,
+    hasDigit,
+  };
+}
+
+// URL末尾の不要な文字を除去する関数
+export // URL末尾の不要な文字を除去する関数
+const cleanUrlEnd = (url: string): string => {
+  let cleanedUrl = url;
+
+  // 末尾から不要な文字を除去（句点、記号、括弧など）
+  const trailingChars = /[。．.、,，;；:：!！?？→←）」』】〉》〕\)\]}>]$/;
+
+  while (trailingChars.test(cleanedUrl)) {
+    const lastChar = cleanedUrl.slice(-1);
+
+    // 閉じ括弧の場合は対応する開き括弧があるかチェック
+    if (lastChar === ")") {
+      const openCount = (cleanedUrl.match(/\(/g) || []).length;
+      const closeCount = (cleanedUrl.match(/\)/g) || []).length;
+      if (openCount >= closeCount) break; // ペアになっている場合は除去しない
+    } else if (lastChar === "）") {
+      const openCount = (cleanedUrl.match(/（/g) || []).length;
+      const closeCount = (cleanedUrl.match(/）/g) || []).length;
+      if (openCount >= closeCount) break;
+    } else if (lastChar === "」") {
+      const openCount = (cleanedUrl.match(/「/g) || []).length;
+      const closeCount = (cleanedUrl.match(/」/g) || []).length;
+      if (openCount >= closeCount) break;
+    } else if (lastChar === "]") {
+      const openCount = (cleanedUrl.match(/\[/g) || []).length;
+      const closeCount = (cleanedUrl.match(/\]/g) || []).length;
+      if (openCount >= closeCount) break;
+    } else if (lastChar === "}") {
+      const openCount = (cleanedUrl.match(/\{/g) || []).length;
+      const closeCount = (cleanedUrl.match(/\}/g) || []).length;
+      if (openCount >= closeCount) break;
+    }
+
+    cleanedUrl = cleanedUrl.slice(0, -1);
+  }
+
+  return cleanedUrl;
+};

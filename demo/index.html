@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Nostr Parser Live Demo with Tags</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 2rem;
+      }
+      textarea {
+        width: 100%;
+        font-family: monospace;
+        margin-bottom: 1rem;
+      }
+      #input {
+        height: 150px;
+      }
+      #tags {
+        height: 100px;
+      }
+      pre {
+        background: #f4f4f4;
+        padding: 1rem;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 400px;
+        overflow: auto;
+      }
+      #htmlOutput {
+        background: #fffbea;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        margin-top: 1rem;
+        max-height: 400px;
+        overflow: auto;
+        white-space: pre-line;
+        word-break: normal;
+        word-wrap: break-word;
+      }
+      label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 0.5rem;
+      }
+      .section {
+        margin-bottom: 1.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Nostr Parser Live Demo with Tags</h1>
+
+    <div class="section">
+      <label>
+        <input type="checkbox" id="prefixOnly" checked />
+        Include Nostr prefix only (nostr:...)
+      </label>
+    </div>
+
+    <div class="section">
+      <label for="input">Input Content</label>
+      <textarea id="input"></textarea>
+    </div>
+
+    <div class="section">
+      <label for="tags">Tags (JSON array)</label>
+      <textarea id="tags"></textarea>
+    </div>
+
+    <div class="section">
+      <label>Parsed Tokens</label>
+      <pre id="output"></pre>
+    </div>
+    <div class="section">
+      <label>Parsed Tokens (HTML)</label>
+      <div id="htmlOutput"></div>
+    </div>
+    <script type="module">
+      import { parseContent } from "../src/parseContent";
+
+      import { TokenType } from "../src/patterns";
+      const inputEl = document.getElementById("input");
+      const outputEl = document.getElementById("output");
+      const prefixOnlyEl = document.getElementById("prefixOnly");
+      const tagsEl = document.getElementById("tags");
+      const htmlOutputEl = document.getElementById("htmlOutput");
+
+      const initialContent = `✅ nostr:付きNostr ID
+nostr:npub1sjcvg64knxkrt6ev52rywzu9uzqakgy8ehhk8yezxmpewsthst6sw3jqcw
+nostr:note1yxwmh466t60gxand59s2qvqzpf08ygml7gkakwjsavd0gaarec7s9rzy44
+nostr:nevent1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+
+✅ nostr:なし（prefixOnlyのチェックで動作変化）
+npub1sjcvg64knxkrt6ev52rywzu9uzqakgy8ehhk8yezxmpewsthst6sw3jqcw
+note1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+
+✅ カスタム絵文字（:monosimple: / :monokashiwa:）
+This is a :monosimple: and also a :monokashiwa:.
+
+✅ URLチェック（前後に日本語や記号が付く場合）
+このサイト→https://example.com/nostr?ref=test←もチェック
+末尾の句点。https://example.com/path/to/resource。
+前後に括弧：(https://test.com) や「https://test.com」
+
+✅ NIP識別子（プレーンテキスト）
+NIP-01 is basic. Others: NIP-19, NIP-B0.
+
+✅ Invoice
+lnbc500n1p598rhqpp5d4kgq0lr88glxhs4sxva6uduv3543q9d5vaad355krvjnkmjwgcshp5cxjk04cumj5hpn0vvjcxpsvkszfqxr2m4fnmxtutcljdkz5gx72qcqzzsxqyz5vqsp5ughur83l2uzqffyen9q3has96xjflfyfd49fmjswmhcaec9m0qjq9qxpqysgq554y0gn9nrh9vtxpm350v55dvga0uk5csydutcs7t5t6vtcgjth30sfuuv986vud4rewv5u6kldtpumuj3sgrdhlv57dm3wra3sey7qpcsc394
+
+✅ 雑なテキスト確認
+hello@example.com も test@lnurl.example も含めて
+#hashtag や @mention などは無効として扱われる？
+bitcoin:bc1qexampleaddressforbtc12345
+`;
+
+      const initialTags = `[
+  ["emoji", "monosimple", "https://i.imgur.com/n0Cqc5T.png"],
+  ["emoji", "monokashiwa", "https://i.imgur.com/aRcM4IC.png"]
+]`;
+
+      inputEl.value = initialContent;
+      tagsEl.value = initialTags;
+
+      function updateOutput() {
+        let tags = [];
+        try {
+          tags = JSON.parse(tagsEl.value);
+        } catch {
+          outputEl.textContent = "Invalid JSON in tags";
+          htmlOutputEl.textContent = "";
+          return;
+        }
+
+        const includeNostrPrefixOnly = prefixOnlyEl.checked;
+
+        const tokens = parseContent(inputEl.value, tags, {
+          includeNostrPrefixOnly,
+        });
+
+        outputEl.textContent = JSON.stringify(tokens, null, 2);
+
+        htmlOutputEl.innerHTML = renderContentToHTML(inputEl.value, tags, {
+          includeNostrPrefixOnly,
+        });
+      }
+
+      function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, (m) => {
+          switch (m) {
+            case "&":
+              return "&amp;";
+            case "<":
+              return "&lt;";
+            case ">":
+              return "&gt;";
+            case '"':
+              return "&quot;";
+            case "'":
+              return "&#39;";
+            default:
+              return m;
+          }
+        });
+      }
+
+      function renderContentToHTML(content, tags, options) {
+        const tokens = parseContent(content, tags, options);
+
+        return tokens
+          .map((token) => {
+            switch (token.type) {
+              case TokenType.NPUB:
+              case TokenType.NPROFILE:
+              case TokenType.NEVENT:
+              case TokenType.NADDR:
+              case TokenType.NSEC:
+              case TokenType.NOTE:
+                return `<a href="https://njump.me/${escapeHtml(
+                  token.metadata.plainNip19
+                )}" class="nostr-link">${escapeHtml(token.content)}</a>`;
+              case TokenType.HASHTAG:
+                return `<a href="/tag/${escapeHtml(
+                  token.content.slice(1)
+                )}" class="hashtag">${escapeHtml(token.content)}</a>`;
+              case TokenType.URL:
+              case TokenType.LN_URL:
+                return `<a href="${escapeHtml(
+                  token.content
+                )}" target="_blank" rel="noopener noreferrer" class="url">${escapeHtml(
+                  token.content
+                )}</a>`;
+
+              case TokenType.CUSTOM_EMOJI: {
+                if (token.metadata.url) {
+                  return `<img src="${escapeHtml(
+                    token.metadata.url
+                  )}" alt="${escapeHtml(
+                    token.metadata.name
+                  )}" class="custom-emoji" />`;
+                }
+                return escapeHtml(token.content);
+              }
+              case TokenType.NIP_IDENTIFIER: {
+                return `<a href="https://github.com/nostr-protocol/nips/blob/master/${escapeHtml(
+                  token.metadata.number
+                )}.md" class="nostr-link">${escapeHtml(token.content)}</a>`;
+              }
+              case TokenType.LNBC: {
+                return `<a href="lightning:${escapeHtml(
+                  token.content
+                )}" class="lnbc-link">${escapeHtml(token.content)}</a>`;
+              }
+              default:
+                return escapeHtml(token.content);
+            }
+          })
+          .join("");
+      }
+
+      inputEl.addEventListener("input", updateOutput);
+      prefixOnlyEl.addEventListener("change", updateOutput);
+      tagsEl.addEventListener("input", updateOutput);
+
+      updateOutput();
+    </script>
+  </body>
+</html>

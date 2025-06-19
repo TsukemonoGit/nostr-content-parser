@@ -1,0 +1,35 @@
+{
+  "name": "nostr-content-parser",
+  "version": "1.0.0",
+  "description": "Parse Nostr content into tokens",
+  "main": "src/index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "prepublishOnly": "npm run test:run && npm run build"
+  },
+  "keywords": [
+    "nostr",
+    "parser",
+    "nip19",
+    "content",
+    "token"
+  ],
+  "author": "mono",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

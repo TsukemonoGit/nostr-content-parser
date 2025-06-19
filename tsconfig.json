@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+       "declaration": true,         // 型定義ファイルを生成
+         "emitDeclarationOnly": false, // jsも出力（trueだとtsだけ）
+    "target": "ES2020",               // コンパイル後のJSのバージョン
+    "module": "ESNext",               // モジュール解決方式（ESモジュール）
+    "moduleResolution": "node",      // Node.jsのモジュール解決
+    "strict": true,                  // 厳密な型チェックを有効に
+    "esModuleInterop": true,         // CommonJSとの互換性
+    "forceConsistentCasingInFileNames": true,  // 大文字小文字の厳密チェック
+    "skipLibCheck": true,            // 型定義ファイルのチェックスキップ
+    "resolveJsonModule": true,       // JSONをimport可能に
+    "outDir": "./dist",              // コンパイル後の出力先フォルダ
+    "rootDir": "./src",              // ソースコードのルートディレクトリ
+    "sourceMap": true                // ソースマップを出力
+  },
+  "include": ["src"],                // コンパイル対象のファイルやフォルダ
+  "exclude": ["node_modules", "dist"]  // 除外するフォルダ
+}
