@@ -496,19 +496,19 @@ describe("Lightning and Bitcoin parsing", () => {
     });
 
     const input = "https://example.com/videofile"; // 拡張子なし
-    const tokens = await parseContentAsync(input, [], { detectUrlType: true });
+    const tokens = await parseContentAsync(input, []);
 
     const urlToken = tokens.find((t) => t.type === TokenType.URL);
     expect(urlToken).toBeDefined();
     expect(urlToken?.metadata?.type).toBe("video");
   });
 
-  it("detectUrlType: false のときは Content-Type による判定を行わない", async () => {
+  it("parseContent のときは Content-Type による判定を行わない", async () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy;
 
     const input = "https://example.com/unknown";
-    const tokens = parseContent(input, [], { detectUrlType: false });
+    const tokens = parseContent(input, []);
 
     const urlToken = tokens.find((t) => t.type === TokenType.URL);
     expect(urlToken).toBeDefined();
