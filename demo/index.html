@@ -183,12 +183,7 @@ https://nostviewstr.vercel.app/naddr1qvzqqqr4xvpzpp9sc34tdxdvxh4jeg5xgu9ctcypmvs
         return tokens
           .map((token) => {
             switch (token.type) {
-              case TokenType.NPUB:
-              case TokenType.NPROFILE:
-              case TokenType.NEVENT:
-              case TokenType.NADDR:
-              case TokenType.NSEC:
-              case TokenType.NOTE:
+              case TokenType.NIP19:
                 return `<a href="https://njump.me/${escapeHtml(
                   token.metadata.plainNip19
                 )}" class="nostr-link">${escapeHtml(token.content)}</a>`;
