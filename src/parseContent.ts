@@ -1,4 +1,4 @@
-// 修正版 parseContent.ts - URL優先対応
+// 修正版 parseContent.ts - 同期/非同期版分離
 import {
   NIP19_PATTERNS,
   URL_PATTERN,
@@ -58,10 +58,8 @@ function detectUrlTypeFromExtension(url: string): string | undefined {
   return;
 }
 
-async function findUrlTokens(
-  content: string,
-  detectUrlType: boolean
-): Promise<Token[]> {
+// 同期版：拡張子ベースの判定のみ
+function findUrlTokensSync(content: string): Token[] {
   const urlTokens: Token[] = [];
   const pattern = new RegExp(URL_PATTERN.source, URL_PATTERN.flags);
   let match: RegExpExecArray | null;
@@ -82,9 +80,53 @@ async function findUrlTokens(
     const detectedType = detectUrlTypeFromExtension(cleanedUrl);
     if (detectedType) {
       metadata.type = detectedType;
-    } else if (detectUrlType) {
-      const detected = await fetchUrlContentType(cleanedUrl);
-      if (detected) metadata.type = detected;
+    }
+
+    urlTokens.push(
+      createToken(TokenType.URL, cleanedUrl, start, end, metadata)
+    );
+
+    if (cleanedUrl !== originalUrl) {
+      const removedPart = originalUrl.slice(cleanedUrl.length);
+      urlTokens.push(
+        createToken(
+          TokenType.TEXT,
+          removedPart,
+          start + cleanedUrl.length,
+          start + originalUrl.length
+        )
+      );
+    }
+  }
+
+  return urlTokens;
+}
+
+// 非同期版：HTTPヘッダーも確認
+async function findUrlTokensAsync(content: string): Promise<Token[]> {
+  const urlTokens: Token[] = [];
+  const pattern = new RegExp(URL_PATTERN.source, URL_PATTERN.flags);
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(content)) !== null) {
+    const originalUrl = match[0];
+    const cleanedUrl = cleanUrlEnd(originalUrl);
+    const start = match.index;
+    const end = start + cleanedUrl.length;
+    const scheme = cleanedUrl.startsWith("https://")
+      ? "https"
+      : cleanedUrl.startsWith("http://")
+      ? "http"
+      : null;
+
+    const metadata: Record<string, unknown> = { scheme };
+
+    const detectedType = detectUrlTypeFromExtension(cleanedUrl);
+    if (detectedType) {
+      metadata.type = detectedType;
+    } else {
+      const fetchedType = await fetchUrlContentType(cleanedUrl);
+      if (fetchedType) metadata.type = fetchedType;
     }
 
     urlTokens.push(
@@ -338,28 +380,7 @@ function removeOverlaps(matches: Token[]): Token[] {
   return result.sort((a, b) => a.start - b.start); // 再整列
 }
 
-export async function parseContent(
-  content: string,
-  tags: string[][] = [],
-  options: { includeNostrPrefixOnly?: boolean; detectUrlType?: boolean } = {}
-): Promise<Token[]> {
-  if (!content) return [];
-  const { includeNostrPrefixOnly = true, detectUrlType = false } = options;
-
-  // 最初にURLを検出して保護範囲を設定
-  const urlTokens = await findUrlTokens(content, detectUrlType);
-  const matches: Token[] = [...urlTokens];
-
-  // NIP-19パターンを処理（URLの範囲を除外）
-  processNip19Patterns(content, NIP19_PATTERNS, matches, urlTokens);
-  if (!includeNostrPrefixOnly) {
-    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches, urlTokens);
-  }
-
-  // その他のパターンを処理（URLの範囲を除外）
-  processPatterns(content, matches, tags, urlTokens);
-
-  // 重複を除去
+function buildTokens(content: string, matches: Token[]): Token[] {
   const filteredMatches = removeOverlaps(matches);
 
   // テキストトークンを挿入
@@ -390,6 +411,56 @@ export async function parseContent(
     );
   }
   return tokens;
+}
+
+// 同期版：detectUrlType = falseの場合
+export function parseContent(
+  content: string,
+  tags: string[][] = [],
+  options: { includeNostrPrefixOnly?: boolean } = {}
+): Token[] {
+  if (!content) return [];
+  const { includeNostrPrefixOnly = true } = options;
+
+  // URLを検出（拡張子ベースのみ）
+  const urlTokens = findUrlTokensSync(content);
+  const matches: Token[] = [...urlTokens];
+
+  // NIP-19パターンを処理（URLの範囲を除外）
+  processNip19Patterns(content, NIP19_PATTERNS, matches, urlTokens);
+  if (!includeNostrPrefixOnly) {
+    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches, urlTokens);
+  }
+
+  // その他のパターンを処理（URLの範囲を除外）
+  processPatterns(content, matches, tags, urlTokens);
+
+  return buildTokens(content, matches);
+}
+
+// 非同期版：detectUrlType = trueの場合
+export async function parseContentAsync(
+  content: string,
+  tags: string[][] = [],
+  options: { includeNostrPrefixOnly?: boolean } = {}
+): Promise<Token[]> {
+  if (!content) return [];
+  const { includeNostrPrefixOnly = true } = options;
+
+  // URLを検出（HTTPヘッダーも確認）
+  const urlTokens = await findUrlTokensAsync(content);
+  const matches: Token[] = [...urlTokens];
+
+  // NIP-19パターンを処理（URLの範囲を除外）
+  processNip19Patterns(content, NIP19_PATTERNS, matches, urlTokens);
+  if (!includeNostrPrefixOnly) {
+    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches, urlTokens);
+  }
+
+  // その他のパターンを処理（URLの範囲を除外）
+  processPatterns(content, matches, tags, urlTokens);
+
+  return buildTokens(content, matches);
 }
 
 export function filterTokens<T extends TokenType>(

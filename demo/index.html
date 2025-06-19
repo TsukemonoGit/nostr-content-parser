@@ -152,7 +152,7 @@
 
         const includeNostrPrefixOnly = prefixOnlyEl.checked;
 
-        const tokens = await parseContent(inputEl.value, tags, {
+        const tokens = parseContent(inputEl.value, tags, {
           includeNostrPrefixOnly,
         });
 
@@ -186,8 +186,8 @@
         });
       }
 
-      async function renderContentToHTML(content, tags, options) {
-        const tokens = await parseContent(content, tags, options);
+      function renderContentToHTML(content, tags, options) {
+        const tokens = parseContent(content, tags, options);
 
         return tokens
           .map((token) => {

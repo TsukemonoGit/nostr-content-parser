@@ -13,6 +13,7 @@ npm install @konemono/nostr-content-parser
 ```javascript
 import {
   parseContent,
+  parseContentAsync,
   TokenType,
   NIP19SubType,
 } from "@konemono/nostr-content-parser";
@@ -20,8 +21,13 @@ import {
 const content = "Hello npub1xyz... Check :custom_emoji: #nostr";
 const tags = [["emoji", "custom_emoji", "https://example.com/emoji.png"]];
 
+// Synchronous parsing (recommended for most cases)
 const tokens = parseContent(content, tags);
 console.log(tokens);
+
+// Asynchronous parsing with URL type detection
+const tokensWithUrlTypes = await parseContentAsync(content, tags);
+console.log(tokensWithUrlTypes);
 ```
 
 ## Token Types
@@ -54,23 +60,55 @@ console.log(tokens);
 
 ### Core Functions
 
-- `parseContent(content, tags, options?)` - Parse content into tokens
+#### `parseContent(content, tags, options?)`
 
-  **Parameters:**
+**Synchronous parsing** - Recommended for most use cases.
 
-  - `content: string` – Input content to parse.
-  - `tags: string[][]` – Optional tag array (used for custom emoji, etc).
-  - `options: object` – Optional settings:
-    - `includeNostrPrefixOnly?: boolean`  
-      If `true` (default), only tokens starting with `nostr:` will be included for NIP-19.  
-      If `false`, plain NIP-19 tokens (without prefix) will also be parsed.
-    - `detectUrlType?: boolean`  
-      If `true`, attempts to determine URL content type (e.g. `"image"`, `"video"`, `"audio"`)  
-      using HTTP `HEAD` request when the extension is not available.  
-      If `false` (default), only extension-based detection is performed (lightweight).
+**Parameters:**
 
-  **Returns:**  
-  `Promise<Token[]>`
+- `content: string` – Input content to parse.
+- `tags: string[][]` – Optional tag array (used for custom emoji, etc).
+- `options: object` – Optional settings:
+  - `includeNostrPrefixOnly?: boolean`  
+    If `true` (default), only tokens starting with `nostr:` will be included for NIP-19.  
+    If `false`, plain NIP-19 tokens (without prefix) will also be parsed.
+
+**Returns:** `Token[]`
+
+URL type detection is performed based on file extensions only (fast and lightweight).
+
+#### `parseContentAsync(content, tags, options?)`
+
+**Asynchronous parsing** - Use when you need comprehensive URL type detection.
+
+**Parameters:**
+
+- `content: string` – Input content to parse.
+- `tags: string[][]` – Optional tag array (used for custom emoji, etc).
+- `options: object` – Optional settings:
+  - `includeNostrPrefixOnly?: boolean` (same as sync version)
+
+**Returns:** `Promise<Token[]>`
+
+URL type detection includes HTTP HEAD requests to determine content type when file extension is not available.
+
+#### `parseContent(content, tags, options?)` _(Legacy)_
+
+**Unified interface** - Automatically chooses sync/async based on options.
+
+**Parameters:**
+
+- `content: string` – Input content to parse.
+- `tags: string[][]` – Optional tag array (used for custom emoji, etc).
+- `options: object` – Optional settings:
+  - `includeNostrPrefixOnly?: boolean` (same as above)
+  - `detectUrlType?: boolean`  
+    If `true`, uses async parsing with HTTP requests for URL type detection.  
+    If `false` (default), uses sync parsing with extension-based detection only.
+
+**Returns:** `Promise<Token[]>`
+
+### Filter Functions
 
 - `filterTokens(tokens, types)` - Filter tokens by type
 - `filterTokensBy(tokens, predicate)` - Filter tokens by custom predicate
@@ -105,16 +143,37 @@ console.log(tokens);
 
 ## Examples
 
-### Basic Parsing
+### Basic Parsing (Synchronous)
 
 ```javascript
+// Fast, synchronous parsing
 const tokens = parseContent("Check out npub1xyz... and #nostr!");
 // Returns tokens with NIP19 and HASHTAG types
+```
+
+### URL Type Detection (Asynchronous)
+
+```javascript
+// Comprehensive URL type detection
+const content =
+  "Check this image: https://example.com/photo and https://example.com/video.mp4";
+const tokens = await parseContentAsync(content);
+
+const urls = getUrls(tokens);
+urls.forEach((url) => {
+  console.log(`URL: ${url.content}`);
+  console.log(`Scheme: ${url.metadata.scheme}`); // "https", "http"
+  console.log(`Type: ${url.metadata.type}`); // "image", "video", "audio" (if detected)
+});
 ```
 
 ### Working with NIP19 Tokens
 
 ```javascript
+const tokens = parseContent("Check nostr:npub1xyz... and note1abc...", [], {
+  includeNostrPrefixOnly: false, // Include plain NIP19 tokens
+});
+
 const nip19Tokens = getNip19Entities(tokens);
 nip19Tokens.forEach((token) => {
   console.log(`Type: ${token.metadata.subType}`); // "npub", "note", etc.
@@ -141,14 +200,14 @@ emojis.forEach((emoji) => {
 });
 ```
 
-### URL Processing
+### Performance Comparison
 
 ```javascript
-const urls = getUrls(tokens);
-urls.forEach((url) => {
-  console.log(`URL: ${url.content}`);
-  console.log(`Scheme: ${url.metadata.scheme}`); // "https", "http", etc.
-});
+// Fast: Extension-based URL type detection only
+const fastTokens = parseContent(content);
+
+// Comprehensive: Includes HTTP requests for unknown URLs
+const detailedTokens = await parseContentAsync(content);
 ```
 
 ## Token Structure
@@ -190,7 +249,8 @@ interface Token {
 
 ```javascript
 {
-  scheme: "https";
+  scheme: "https",
+  type: "image" // Only present if detected
 }
 ```
 
