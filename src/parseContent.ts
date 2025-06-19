@@ -81,15 +81,8 @@ async function findUrlTokens(
     if (detectedType) {
       metadata.type = detectedType;
     } else if (detectUrlType) {
-      try {
-        const res = await fetch(cleanedUrl, { method: "HEAD" });
-        const contentType = res.headers.get("Content-Type") || "";
-        if (contentType.startsWith("video/")) metadata.type = "video";
-        else if (contentType.startsWith("audio/")) metadata.type = "audio";
-        else if (contentType.startsWith("image/")) metadata.type = "image";
-      } catch {
-        // 通信失敗時は無視
-      }
+      const detected = await fetchUrlContentType(cleanedUrl);
+      if (detected) metadata.type = detected;
     }
 
     urlTokens.push(
@@ -502,4 +495,31 @@ export function resetPatterns(): void {
     NIP_IDENTIFIER_PATTERN,
   ];
   allPatterns.forEach((pattern) => (pattern.lastIndex = 0));
+}
+
+// モジュール内キャッシュ
+const urlTypeCache = new Map<string, string>(); // cleanedUrl → "image"/"video"/...
+
+async function fetchUrlContentType(url: string): Promise<string | undefined> {
+  if (urlTypeCache.has(url)) {
+    return urlTypeCache.get(url);
+  }
+
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    const contentType = res.headers.get("Content-Type") || "";
+    let type: string | undefined;
+
+    if (contentType.startsWith("video/")) type = "video";
+    else if (contentType.startsWith("audio/")) type = "audio";
+    else if (contentType.startsWith("image/")) type = "image";
+
+    if (type) {
+      urlTypeCache.set(url, type); // 成功したものだけキャッシュ
+    }
+
+    return type;
+  } catch {
+    return undefined; // ネットワークエラー時はキャッシュしない
+  }
 }
