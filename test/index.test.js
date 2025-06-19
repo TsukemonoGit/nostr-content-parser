@@ -28,7 +28,7 @@ const TEST_NPROFILE = 'nprofile1qyxhwumn8ghj77tpvf6jumt9qqsgfvxyd2mfntp4avk29pj8
 
 const sampleTokens = [
     { type: TokenType.TEXT, content: 'hello' },
-    { type: TokenType.NPUB, content: TEST_NPUB },
+    { type: TokenType.NIP19, content: TEST_NPUB },
     { type: TokenType.URL, content: 'https://example.com' },
     { type: TokenType.CUSTOM_EMOJI, content: ':fire:', metadata: { name: 'fire' } },
     { type: TokenType.HASHTAG, content: '#nostr', metadata: { tag: 'nostr' } },
@@ -49,7 +49,7 @@ describe('parseContent', () => {
     const entities = getNip19Entities(sampleTokens);
     console.log(entities)
     expect(entities).toHaveLength(1);
-    expect(entities[0].type).toBe(TokenType.NPUB);
+    expect(entities[0].type).toBe(TokenType.NIP19);
   });
 
   it('should get URLs', () => {
@@ -115,7 +115,7 @@ describe('parseContent', () => {
     expect(tokens[0].type).toBe(TokenType.TEXT);
     expect(tokens[0].content).toBe('Hello ');
     
-    expect(tokens[1].type).toBe(TokenType.NPUB);
+    expect(tokens[1].type).toBe(TokenType.NIP19);
     expect(tokens[1].content).toBe(`nostr:${TEST_NPUB}`);
     expect(tokens[1].metadata.plainNip19).toBe(`${TEST_NPUB}`);
     expect(tokens[2].type).toBe(TokenType.TEXT);
@@ -128,9 +128,9 @@ describe('parseContent', () => {
     
     console.log(tokens)
     expect(tokens).toHaveLength(3);
-    expect(tokens[0].type).toBe(TokenType.NPUB);
+    expect(tokens[0].type).toBe(TokenType.NIP19);
     expect(tokens[1].type).toBe(TokenType.TEXT);
-    expect(tokens[2].type).toBe(TokenType.NOTE);
+    expect(tokens[2].type).toBe(TokenType.NIP19);
   });
 
   it('should parse URLs', () => {
@@ -195,7 +195,7 @@ describe('parseContent', () => {
     
     expect(mentionTokens[0].content).toBe(`nostr:${TEST_NPUB}`);
     expect(mentionTokens[0].metadata.entity).toBe(TEST_NPUB);
-    expect(mentionTokens[0].metadata.entityType).toBe(TokenType.NPUB);
+    expect(mentionTokens[0].metadata.entityType).toBe(TokenType.NIP19);
     
     expect(mentionTokens[1].content).toBe(`nostr:${TEST_NPROFILE}`);
     expect(mentionTokens[1].metadata.entity).toBe(TEST_NPROFILE);
@@ -209,7 +209,7 @@ describe('parseContent', () => {
     
     const types = tokens.map(t => t.type);
     expect(types).toContain(TokenType.TEXT);
-    expect(types).toContain(TokenType.NPUB);
+    expect(types).toContain(TokenType.NIP19);
     expect(types).toContain(TokenType.CUSTOM_EMOJI);
     expect(types).toContain(TokenType.URL);
     expect(types).toContain(TokenType.HASHTAG);
@@ -233,7 +233,7 @@ describe('parseContent', () => {
     
     expect(tokens[0].type).toBe(TokenType.URL);
     expect(tokens[0].content).toBe('https://example.com/npub1test');
-    expect(tokens[2].type).toBe(TokenType.NPUB);
+    expect(tokens[2].type).toBe(TokenType.NIP19);
   });
 });
 
@@ -241,7 +241,7 @@ describe('filterTokens', () => {
   it('should filter tokens by single type', () => {
     const tokens = [
       { type: TokenType.TEXT, content: 'hello' },
-      { type: TokenType.NPUB, content: TEST_NPUB },
+      { type: TokenType.NIP19, content: TEST_NPUB },
       { type: TokenType.TEXT, content: 'world' }
     ];
     
@@ -253,22 +253,22 @@ describe('filterTokens', () => {
   it('should filter tokens by multiple types', () => {
     const tokens = [
       { type: TokenType.TEXT, content: 'hello' },
-      { type: TokenType.NPUB, content: TEST_NPUB },
+      { type: TokenType.NIP19, content: TEST_NPUB },
       { type: TokenType.URL, content: 'https://example.com' },
-      { type: TokenType.NOTE, content: TEST_NOTE }
+      { type: TokenType.NIP19, content: TEST_NOTE }
     ];
     
-    const filtered = filterTokens(tokens, [TokenType.NPUB, TokenType.NOTE]);
+    const filtered = filterTokens(tokens, [TokenType.NIP19, TokenType.NIP19]);
     expect(filtered).toHaveLength(2);
-    expect(filtered[0].type).toBe(TokenType.NPUB);
-    expect(filtered[1].type).toBe(TokenType.NOTE);
+    expect(filtered[0].type).toBe(TokenType.NIP19);
+    expect(filtered[1].type).toBe(TokenType.NIP19);
   });
 });
 
 describe('utility functions', () => {
   const sampleTokens = [
     { type: TokenType.TEXT, content: 'hello' },
-    { type: TokenType.NPUB, content: TEST_NPUB },
+    { type: TokenType.NIP19, content: TEST_NPUB },
     { type: TokenType.URL, content: 'https://example.com' },
     { type: TokenType.CUSTOM_EMOJI, content: ':fire:', metadata: { name: 'fire' } },
     { type: TokenType.HASHTAG, content: '#nostr', metadata: { tag: 'nostr' } },
@@ -278,7 +278,7 @@ describe('utility functions', () => {
   it('should get NIP-19 entities', () => {
     const entities = getNip19Entities(sampleTokens);
     expect(entities).toHaveLength(1);
-    expect(entities[0].type).toBe(TokenType.NPUB);
+    expect(entities[0].type).toBe(TokenType.NIP19);
   });
 
   it('should get URLs', () => {
@@ -316,26 +316,26 @@ describe('edge cases', () => {
     const tokens = parseContent(content);
     
     expect(tokens).toHaveLength(3);
-    expect(tokens[0].type).toBe(TokenType.NPUB);
+    expect(tokens[0].type).toBe(TokenType.NIP19);
     expect(tokens[1].type).toBe(TokenType.TEXT);
     expect(tokens[1].content).toBe(' ');
-    expect(tokens[2].type).toBe(TokenType.NOTE);
+    expect(tokens[2].type).toBe(TokenType.NIP19);
   });
 it('should detect npub with and without nostr prefix', () => {
   const content = `nostr:${TEST_NPUB} nostr:${TEST_NPUB}`;
   const tokens = parseContent(content, [], { includeNostrPrefixOnly: false });
 
   console.log(tokens)
-  expect(tokens.filter(t => t.type === TokenType.NPUB)).toHaveLength(2);
+  expect(tokens.filter(t => t.type === TokenType.NIP19)).toHaveLength(2);
 });
   it('should handle tokens at start and end', () => {
     const content = `${TEST_NPUB} middle text nostr:${TEST_NOTE}`;
     const tokens = parseContent(content,[],{includeNostrPrefixOnly:false});
     console.log(tokens)
-    expect(tokens[0].type).toBe(TokenType.NPUB);
+    expect(tokens[0].type).toBe(TokenType.NIP19);
     expect(tokens[0].start).toBe(0);
     expect(tokens[tokens.length - 1].content).toBe(`nostr:${TEST_NOTE}`);
-      expect(tokens[tokens.length - 1].type).toBe(TokenType.NOTE);
+      expect(tokens[tokens.length - 1].type).toBe(TokenType.NIP19);
     expect(tokens[tokens.length - 1].end).toBe(content.length);
   });
 
@@ -430,7 +430,7 @@ describe('Lightning and Bitcoin parsing', () => {
 
     // 最初のURLトークンが存在し、npubは無視される
     const urlTokens = tokens.filter(t => t.type === TokenType.URL);
-    const npubTokens = tokens.filter(t => t.type === TokenType.NPUB);
+    const npubTokens = tokens.filter(t => t.type === TokenType.NIP19);
 
     expect(urlTokens).toHaveLength(1);
     expect(urlTokens[0].content).toBe(`https://example.com/${innerNpub}`);

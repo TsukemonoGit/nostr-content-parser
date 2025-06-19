@@ -20,6 +20,7 @@ import {
   cleanUrlEnd,
   RELAY_URL_PATTERN,
   NIP19_TYPE_MAP,
+  NIP19SubType,
 } from "./patterns";
 
 function createToken(
@@ -366,6 +367,50 @@ export function filterTokensBy(
   predicate: (token: Token) => boolean
 ): Token[] {
   return tokens.filter(predicate);
+}
+
+// NIP19統合後のフィルター関数
+export function getNip19Entities(tokens: Token[]): Token[] {
+  return filterTokens(tokens, TokenType.NIP19);
+}
+
+// 特定のNIP19サブタイプでフィルター
+export function filterNip19BySubType(
+  tokens: Token[],
+  subType: NIP19SubType | NIP19SubType[]
+): Token[] {
+  const subTypeSet = new Set(Array.isArray(subType) ? subType : [subType]);
+  return tokens.filter(
+    (token) =>
+      token.type === TokenType.NIP19 &&
+      token.metadata?.subType &&
+      subTypeSet.has(token.metadata.subType as NIP19SubType)
+  );
+}
+
+// 個別のNIP19サブタイプ取得関数
+export function getNpubs(tokens: Token[]): Token[] {
+  return filterNip19BySubType(tokens, NIP19SubType.NPUB);
+}
+
+export function getNprofiles(tokens: Token[]): Token[] {
+  return filterNip19BySubType(tokens, NIP19SubType.NPROFILE);
+}
+
+export function getNotes(tokens: Token[]): Token[] {
+  return filterNip19BySubType(tokens, NIP19SubType.NOTE);
+}
+
+export function getNevents(tokens: Token[]): Token[] {
+  return filterNip19BySubType(tokens, NIP19SubType.NEVENT);
+}
+
+export function getNaddrs(tokens: Token[]): Token[] {
+  return filterNip19BySubType(tokens, NIP19SubType.NADDR);
+}
+
+export function getNsecs(tokens: Token[]): Token[] {
+  return filterNip19BySubType(tokens, NIP19SubType.NSEC);
 }
 
 export function getNipIdentifiers(tokens: Token[]): Token[] {
