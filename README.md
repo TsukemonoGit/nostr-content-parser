@@ -11,7 +11,7 @@ npm install @konemono/nostr-content-parser
 ## Usage
 
 ```javascript
-import { parseContent, TokenType } from "nostr-content-parser";
+import { parseContent, TokenType } from "@konemono/nostr-content-parser";
 
 const content = "Hello npub1xyz... Check :custom_emoji: #nostr";
 const tags = [["emoji", "custom_emoji", "https://example.com/emoji.png"]];
