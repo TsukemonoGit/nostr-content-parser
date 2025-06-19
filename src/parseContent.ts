@@ -42,8 +42,24 @@ function isOverlapping(
   return start1 < end2 && start2 < end1;
 }
 
-// URLを最初に処理して、その範囲を保護する
-function findUrlTokens(content: string): Token[] {
+function detectUrlTypeFromExtension(url: string): string | undefined {
+  const ext = url.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase();
+  if (!ext) return;
+
+  const videoExt = ["mp4", "webm", "mov", "mkv"];
+  const audioExt = ["mp3", "wav", "ogg", "flac"];
+  const imageExt = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
+
+  if (videoExt.includes(ext)) return "video";
+  if (audioExt.includes(ext)) return "audio";
+  if (imageExt.includes(ext)) return "image";
+  return;
+}
+
+async function findUrlTokens(
+  content: string,
+  detectUrlType: boolean
+): Promise<Token[]> {
   const urlTokens: Token[] = [];
   const pattern = new RegExp(URL_PATTERN.source, URL_PATTERN.flags);
   let match: RegExpExecArray | null;
@@ -59,11 +75,27 @@ function findUrlTokens(content: string): Token[] {
       ? "http"
       : null;
 
+    const metadata: Record<string, unknown> = { scheme };
+
+    const detectedType = detectUrlTypeFromExtension(cleanedUrl);
+    if (detectedType) {
+      metadata.type = detectedType;
+    } else if (detectUrlType) {
+      try {
+        const res = await fetch(cleanedUrl, { method: "HEAD" });
+        const contentType = res.headers.get("Content-Type") || "";
+        if (contentType.startsWith("video/")) metadata.type = "video";
+        else if (contentType.startsWith("audio/")) metadata.type = "audio";
+        else if (contentType.startsWith("image/")) metadata.type = "image";
+      } catch {
+        // 通信失敗時は無視
+      }
+    }
+
     urlTokens.push(
-      createToken(TokenType.URL, cleanedUrl, start, end, { scheme: scheme })
+      createToken(TokenType.URL, cleanedUrl, start, end, metadata)
     );
 
-    // 除去された部分をTEXTトークンとして追加
     if (cleanedUrl !== originalUrl) {
       const removedPart = originalUrl.slice(cleanedUrl.length);
       urlTokens.push(
@@ -300,16 +332,16 @@ function removeOverlaps(matches: Token[]): Token[] {
   return result.sort((a, b) => a.start - b.start); // 再整列
 }
 
-export function parseContent(
+export async function parseContent(
   content: string,
   tags: string[][] = [],
-  options: { includeNostrPrefixOnly?: boolean } = {}
-): Token[] {
+  options: { includeNostrPrefixOnly?: boolean; detectUrlType?: boolean } = {}
+): Promise<Token[]> {
   if (!content) return [];
-  const { includeNostrPrefixOnly = true } = options;
+  const { includeNostrPrefixOnly = true, detectUrlType = false } = options;
 
   // 最初にURLを検出して保護範囲を設定
-  const urlTokens = findUrlTokens(content);
+  const urlTokens = await findUrlTokens(content, detectUrlType);
   const matches: Token[] = [...urlTokens];
 
   // NIP-19パターンを処理（URLの範囲を除外）
