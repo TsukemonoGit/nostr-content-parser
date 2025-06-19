@@ -55,6 +55,23 @@ console.log(tokens);
 ### Core Functions
 
 - `parseContent(content, tags, options?)` - Parse content into tokens
+
+  **Parameters:**
+
+  - `content: string` – Input content to parse.
+  - `tags: string[][]` – Optional tag array (used for custom emoji, etc).
+  - `options: object` – Optional settings:
+    - `includeNostrPrefixOnly?: boolean`  
+      If `true` (default), only tokens starting with `nostr:` will be included for NIP-19.  
+      If `false`, plain NIP-19 tokens (without prefix) will also be parsed.
+    - `detectUrlType?: boolean`  
+      If `true`, attempts to determine URL content type (e.g. `"image"`, `"video"`, `"audio"`)  
+      using HTTP `HEAD` request when the extension is not available.  
+      If `false` (default), only extension-based detection is performed (lightweight).
+
+  **Returns:**  
+  `Promise<Token[]>`
+
 - `filterTokens(tokens, types)` - Filter tokens by type
 - `filterTokensBy(tokens, predicate)` - Filter tokens by custom predicate
 
