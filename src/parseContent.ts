@@ -140,7 +140,7 @@ const PATTERN_CONFIGS = [
         : null;
 
       return {
-        type: TokenType.URL,
+        type: TokenType.RELAY,
         metadata: scheme ? { scheme } : {},
       };
     },
