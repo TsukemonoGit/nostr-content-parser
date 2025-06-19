@@ -201,24 +201,27 @@ function processPatterns(
 
 //重なったトークン同士があったとき、どちらを優先するか
 const PRIORITY: Record<TokenType, number> = {
+  [TokenType.URL]: 15,
   [TokenType.NPUB]: 10,
   [TokenType.NPROFILE]: 10,
   [TokenType.NOTE]: 10,
   [TokenType.NEVENT]: 10,
   [TokenType.NADDR]: 10,
   [TokenType.NSEC]: 10,
-  [TokenType.URL]: 5,
-  [TokenType.TEXT]: 0,
+
+  [TokenType.CASHU_TOKEN]: 2,
+  [TokenType.LNBC]: 2,
+  [TokenType.LN_URL]: 2,
+  [TokenType.LN_ADDRESS]: 2,
+
+  [TokenType.CUSTOM_EMOJI]: 1,
+  [TokenType.BITCOIN_ADDRESS]: 1,
+  [TokenType.EMAIL]: 1,
+
   [TokenType.HASHTAG]: 0,
-  [TokenType.CUSTOM_EMOJI]: 0,
-  [TokenType.EMAIL]: 0,
-  [TokenType.CASHU_TOKEN]: 0,
-  [TokenType.LNBC]: 0,
-  [TokenType.LN_URL]: 0,
   [TokenType.NIP_IDENTIFIER]: 0,
   [TokenType.MENTION]: 0,
-  [TokenType.LN_ADDRESS]: 0,
-  [TokenType.BITCOIN_ADDRESS]: 0,
+  [TokenType.TEXT]: 0,
 };
 
 function removeOverlaps(matches: Token[]): Token[] {
