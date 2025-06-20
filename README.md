@@ -69,9 +69,13 @@ console.log(tokensWithUrlTypes);
 - `content: string` – Input content to parse.
 - `tags: string[][]` – Optional tag array (used for custom emoji, etc).
 - `options: object` – Optional settings:
-  - `includeNostrPrefixOnly?: boolean`  
-    If `true` (default), only tokens starting with `nostr:` will be included for NIP-19.  
+
+  - `includeNostrPrefixOnly?: boolean`
+    If `true` (default), only tokens starting with `nostr:` will be included for NIP-19.
     If `false`, plain NIP-19 tokens (without prefix) will also be parsed.
+  - `hashtagsFromTagsOnly?: boolean`
+    If `true`, only hashtags that match a `t` tag will be parsed as hashtags.
+    If `false` (default), all `#`-prefixed words are treated as hashtags.
 
 **Returns:** `Token[]`
 
@@ -86,7 +90,9 @@ URL type detection is performed based on file extensions only (fast and lightwei
 - `content: string` – Input content to parse.
 - `tags: string[][]` – Optional tag array (used for custom emoji, etc).
 - `options: object` – Optional settings:
+
   - `includeNostrPrefixOnly?: boolean` (same as sync version)
+  - `hashtagsFromTagsOnly?: boolean` (same as sync version)
 
 **Returns:** `Promise<Token[]>`
 
@@ -168,6 +174,18 @@ nip19Tokens.forEach((token) => {
 // Filter specific NIP19 types
 const npubs = getNpubs(tokens);
 const notes = filterNip19BySubType(tokens, NIP19SubType.NOTE);
+```
+
+### Hashtag Filtering
+
+```javascript
+const content = "#nostr #dev";
+const tags = [["t", "nostr"]];
+const tokens = parseContent(content, tags, {
+  hashtagsFromTagsOnly: true,
+});
+
+// Only "#nostr" will be returned as a HASHTAG token
 ```
 
 ### Custom Emoji Handling

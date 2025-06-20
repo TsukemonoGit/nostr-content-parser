@@ -1,4 +1,4 @@
-// 修正版 parseContent.ts - 同期/非同期版分離
+// 修正版 parseContent.ts - ハッシュタグオプション追加
 import {
   NIP19_PATTERNS,
   URL_PATTERN,
@@ -56,6 +56,17 @@ function detectUrlTypeFromExtension(url: string): string | undefined {
   if (audioExt.includes(ext)) return "audio";
   if (imageExt.includes(ext)) return "image";
   return;
+}
+
+// tタグからハッシュタグセットを作成
+function extractHashtagsFromTags(tags: string[][]): Set<string> {
+  const hashtags = new Set<string>();
+  for (const tag of tags) {
+    if (tag.length >= 2 && tag[0] === "t") {
+      hashtags.add(tag[1].toLowerCase());
+    }
+  }
+  return hashtags;
 }
 
 // 同期版：拡張子ベースの判定のみ
@@ -229,13 +240,6 @@ const PATTERN_CONFIGS = [
       };
     },
   },
-  {
-    patterns: { hashtag: HASHTAG_PATTERN },
-    handler: (match: RegExpExecArray) => ({
-      type: TokenType.HASHTAG,
-      metadata: { tag: match[0].slice(1) },
-    }),
-  },
 ];
 
 function processNip19Patterns(
@@ -281,8 +285,13 @@ function processPatterns(
   content: string,
   matches: Token[],
   tags: string[][] = [],
-  protectedRanges: Token[] = []
+  protectedRanges: Token[] = [],
+  hashtagsFromTagsOnly: boolean = true
 ): void {
+  const validHashtags = hashtagsFromTagsOnly
+    ? extractHashtagsFromTags(tags)
+    : null;
+
   for (const config of PATTERN_CONFIGS) {
     for (const [patternType, rawPattern] of Object.entries(config.patterns)) {
       const pattern = new RegExp(rawPattern.source, rawPattern.flags);
@@ -315,6 +324,45 @@ function processPatterns(
         }
       }
     }
+  }
+
+  // ハッシュタグの処理（別途処理）
+  processHashtagPatterns(content, matches, protectedRanges, validHashtags);
+}
+
+function processHashtagPatterns(
+  content: string,
+  matches: Token[],
+  protectedRanges: Token[],
+  validHashtags: Set<string> | null
+): void {
+  const pattern = new RegExp(HASHTAG_PATTERN.source, HASHTAG_PATTERN.flags);
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(content)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const hashtag = match[0].slice(1); // # を除去
+
+    // 既存のマッチとの重複チェック
+    if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+      continue;
+
+    // 保護された範囲との重複チェック
+    if (protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end)))
+      continue;
+
+    // tタグ検証が有効な場合のチェック
+    if (validHashtags && !validHashtags.has(hashtag.toLowerCase())) {
+      continue;
+    }
+
+    matches.push(
+      createToken(TokenType.HASHTAG, match[0], start, end, {
+        tag: hashtag,
+        validated: validHashtags !== null,
+      })
+    );
   }
 }
 
@@ -413,14 +461,20 @@ function buildTokens(content: string, matches: Token[]): Token[] {
   return tokens;
 }
 
+export interface ParseOptions {
+  includeNostrPrefixOnly?: boolean;
+  hashtagsFromTagsOnly?: boolean;
+}
+
 // 同期版：detectUrlType = falseの場合
 export function parseContent(
   content: string,
   tags: string[][] = [],
-  options: { includeNostrPrefixOnly?: boolean } = {}
+  options: ParseOptions = {}
 ): Token[] {
   if (!content) return [];
-  const { includeNostrPrefixOnly = true } = options;
+  const { includeNostrPrefixOnly = true, hashtagsFromTagsOnly = true } =
+    options;
 
   // URLを検出（拡張子ベースのみ）
   const urlTokens = findUrlTokensSync(content);
@@ -433,7 +487,7 @@ export function parseContent(
   }
 
   // その他のパターンを処理（URLの範囲を除外）
-  processPatterns(content, matches, tags, urlTokens);
+  processPatterns(content, matches, tags, urlTokens, hashtagsFromTagsOnly);
 
   return buildTokens(content, matches);
 }
@@ -442,10 +496,11 @@ export function parseContent(
 export async function parseContentAsync(
   content: string,
   tags: string[][] = [],
-  options: { includeNostrPrefixOnly?: boolean } = {}
+  options: ParseOptions = {}
 ): Promise<Token[]> {
   if (!content) return [];
-  const { includeNostrPrefixOnly = true } = options;
+  const { includeNostrPrefixOnly = true, hashtagsFromTagsOnly = true } =
+    options;
 
   // URLを検出（HTTPヘッダーも確認）
   const urlTokens = await findUrlTokensAsync(content);
@@ -458,7 +513,7 @@ export async function parseContentAsync(
   }
 
   // その他のパターンを処理（URLの範囲を除外）
-  processPatterns(content, matches, tags, urlTokens);
+  processPatterns(content, matches, tags, urlTokens, hashtagsFromTagsOnly);
 
   return buildTokens(content, matches);
 }
@@ -540,6 +595,14 @@ export function getCustomEmojis(tokens: Token[]): Token[] {
 
 export function getHashtags(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.HASHTAG);
+}
+
+// tタグで検証されたハッシュタグのみを取得
+export function getValidatedHashtags(tokens: Token[]): Token[] {
+  return tokens.filter(
+    (token) =>
+      token.type === TokenType.HASHTAG && token.metadata?.validated === true
+  );
 }
 
 export function getLightningAddresses(tokens: Token[]): Token[] {

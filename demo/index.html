@@ -56,6 +56,10 @@
         <input type="checkbox" id="prefixOnly" checked />
         Include Nostr prefix only (nostr:...)
       </label>
+      <label>
+        <input type="checkbox" id="hashtagsFromTagsOnly" checked />
+        Hashtags from tags only (t-tag only)
+      </label>
     </div>
 
     <div class="section">
@@ -83,6 +87,9 @@
       const inputEl = document.getElementById("input");
       const outputEl = document.getElementById("output");
       const prefixOnlyEl = document.getElementById("prefixOnly");
+      const hashtagsFromTagsOnlyEl = document.getElementById(
+        "hashtagsFromTagsOnly"
+      );
       const tagsEl = document.getElementById("tags");
       const htmlOutputEl = document.getElementById("htmlOutput");
 
@@ -151,9 +158,11 @@
         }
 
         const includeNostrPrefixOnly = prefixOnlyEl.checked;
+        const hashtagsFromTagsOnly = hashtagsFromTagsOnlyEl.checked;
 
         const tokens = parseContent(inputEl.value, tags, {
           includeNostrPrefixOnly,
+          hashtagsFromTagsOnly,
         });
 
         outputEl.textContent = JSON.stringify(tokens, null, 2);
@@ -163,6 +172,7 @@
           tags,
           {
             includeNostrPrefixOnly,
+            hashtagsFromTagsOnly,
           }
         );
       }
