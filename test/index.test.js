@@ -190,7 +190,7 @@ describe("await parseContent", () => {
 
   it("should parse hashtags", async () => {
     const content = "Learning #nostr and #bitcoin today";
-    const tokens = parseContent(content);
+    const tokens = parseContent(content, [], { hashtagsFromTagsOnly: false });
 
     const hashtagTokens = tokens.filter((t) => t.type === TokenType.HASHTAG);
     expect(hashtagTokens).toHaveLength(2);
@@ -218,7 +218,10 @@ describe("await parseContent", () => {
 
   it("should handle complex mixed content", async () => {
     const content = `Hello nostr:${TEST_NPUB}! Check this :fire: link https://example.com #nostr nostr:${TEST_NOTE}`;
-    const tags = [["emoji", "fire", "https://example.com/fire.png"]];
+    const tags = [
+      ["emoji", "fire", "https://example.com/fire.png"],
+      ["t", "nostr"],
+    ];
     const tokens = parseContent(content, tags);
 
     const types = tokens.map((t) => t.type);
