@@ -74,8 +74,8 @@ console.log(tokensWithUrlTypes);
     If `true` (default), only tokens starting with `nostr:` will be included for NIP-19.
     If `false`, plain NIP-19 tokens (without prefix) will also be parsed.
   - `hashtagsFromTagsOnly?: boolean`
-    If `true`, only hashtags that match a `t` tag will be parsed as hashtags.
-    If `false` (default), all `#`-prefixed words are treated as hashtags.
+    If `true` (default), only hashtags that match a `t` tag will be parsed as hashtags.
+    If `false`, all `#`-prefixed words are treated as hashtags.
 
 **Returns:** `Token[]`
 
