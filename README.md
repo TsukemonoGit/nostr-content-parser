@@ -92,22 +92,6 @@ URL type detection is performed based on file extensions only (fast and lightwei
 
 URL type detection includes HTTP HEAD requests to determine content type when file extension is not available.
 
-#### `parseContent(content, tags, options?)` _(Legacy)_
-
-**Unified interface** - Automatically chooses sync/async based on options.
-
-**Parameters:**
-
-- `content: string` – Input content to parse.
-- `tags: string[][]` – Optional tag array (used for custom emoji, etc).
-- `options: object` – Optional settings:
-  - `includeNostrPrefixOnly?: boolean` (same as above)
-  - `detectUrlType?: boolean`  
-    If `true`, uses async parsing with HTTP requests for URL type detection.  
-    If `false` (default), uses sync parsing with extension-based detection only.
-
-**Returns:** `Promise<Token[]>`
-
 ### Filter Functions
 
 - `filterTokens(tokens, types)` - Filter tokens by type
