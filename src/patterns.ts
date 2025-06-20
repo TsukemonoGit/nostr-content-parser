@@ -113,7 +113,8 @@ export const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 export const CUSTOM_EMOJI_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
 export const HASHTAG_PATTERN = /#[^\s#]+/g;
 // WebSocket Relay URL パターン
-export const RELAY_URL_PATTERN = /wss?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+export const RELAY_URL_PATTERN =
+  /wss?:\/\/[a-zA-Z0-9.-]+(:[0-9]{1,5})?(\/[a-zA-Z0-9._~%+-]*)*/gi;
 // 旧タイプ引用パターン #[数字]
 export const LEGACY_REFERENCE_PATTERN = /#\[\d+\]/g;
 
