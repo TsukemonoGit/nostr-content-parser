@@ -111,7 +111,9 @@ export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;
 export const CASHU_TOKEN_PATTERN = /cashuA[A-Za-z0-9_-]+=*/g;
 export const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 export const CUSTOM_EMOJI_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
-export const HASHTAG_PATTERN = /#[^\s#]+/g;
+export const HASHTAG_PATTERN =
+  /(?<![\p{XID_Continue}\p{Extended_Pictographic}\p{Emoji_Component}_+\-])[#﹟＃](?:(?![#﹟＃])(?:\p{XID_Continue}|\p{Extended_Pictographic}|\p{Emoji_Component}|[_+\-]))+/gu;
+
 // WebSocket Relay URL パターン
 export const RELAY_URL_PATTERN =
   /wss?:\/\/[a-zA-Z0-9.-]+(:[0-9]{1,5})?(\/[a-zA-Z0-9._~%+-]*)*/gi;

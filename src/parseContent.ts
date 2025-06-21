@@ -344,14 +344,6 @@ function processHashtagPatterns(
     const end = start + match[0].length;
     const hashtag = match[0].slice(1); // # を除去
 
-    // ハッシュタグの直前の文字をチェック
-    const prevChar = start > 0 ? content[start - 1] : "";
-    const isValidPosition = start === 0 || /\s/.test(prevChar); // 行頭か空白文字
-
-    if (!isValidPosition) {
-      continue; // 直前が文字の場合はスキップ
-    }
-
     // 既存のマッチとの重複チェック
     if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
       continue;
