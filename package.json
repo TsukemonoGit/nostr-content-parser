@@ -1,6 +1,6 @@
 {
   "name": "@konemono/nostr-content-parser",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Parse Nostr content into tokens",
   "repository": {
     "type": "git",
@@ -10,7 +10,7 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": "./src/index.js",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     }
   },
