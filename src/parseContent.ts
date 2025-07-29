@@ -23,7 +23,7 @@ import {
   NIP19SubType,
   LEGACY_REFERENCE_PATTERN,
   findLegacyReferenceMetadata,
-} from "./patterns";
+} from "./patterns.js";
 
 function createToken(
   type: TokenType,
