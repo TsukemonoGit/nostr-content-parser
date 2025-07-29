@@ -1,4 +1,4 @@
 // index.ts
 
-export * from "./patterns";
-export * from "./parseContent";
+export * from "./patterns.js";
+export * from "./parseContent.js";
