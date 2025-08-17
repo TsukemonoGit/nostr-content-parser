@@ -478,18 +478,17 @@ export function parseContent(
 
   // URLを検出（拡張子ベースのみ）
   const urlTokens = findUrlTokensSync(content);
-  const matches: Token[] = [...urlTokens];
 
   // NIP-19パターンを処理（URLの範囲を除外）
-  processNip19Patterns(content, NIP19_PATTERNS, matches, urlTokens);
+  processNip19Patterns(content, NIP19_PATTERNS, urlTokens, urlTokens);
   if (!includeNostrPrefixOnly) {
-    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches, urlTokens);
+    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, urlTokens, urlTokens);
   }
 
   // その他のパターンを処理（URLの範囲を除外）
-  processPatterns(content, matches, tags, urlTokens, hashtagsFromTagsOnly);
+  processPatterns(content, urlTokens, tags, urlTokens, hashtagsFromTagsOnly);
 
-  return buildTokens(content, matches);
+  return buildTokens(content, urlTokens);
 }
 
 // 非同期版：detectUrlType = trueの場合
@@ -504,18 +503,17 @@ export async function parseContentAsync(
 
   // URLを検出（HTTPヘッダーも確認）
   const urlTokens = await findUrlTokensAsync(content);
-  const matches: Token[] = [...urlTokens];
 
   // NIP-19パターンを処理（URLの範囲を除外）
-  processNip19Patterns(content, NIP19_PATTERNS, matches, urlTokens);
+  processNip19Patterns(content, NIP19_PATTERNS, urlTokens, urlTokens);
   if (!includeNostrPrefixOnly) {
-    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, matches, urlTokens);
+    processNip19Patterns(content, NIP19_PLAIN_PATTERNS, urlTokens, urlTokens);
   }
 
   // その他のパターンを処理（URLの範囲を除外）
-  processPatterns(content, matches, tags, urlTokens, hashtagsFromTagsOnly);
+  processPatterns(content, urlTokens, tags, urlTokens, hashtagsFromTagsOnly);
 
-  return buildTokens(content, matches);
+  return buildTokens(content, urlTokens);
 }
 
 export function filterTokens<T extends TokenType>(
