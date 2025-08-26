@@ -105,7 +105,8 @@ export const NIP19_PLAIN_PATTERNS = {
   nsec: /(?<!nostr:)nsec1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
 };
 
-export const URL_PATTERN = /(https?:\/\/+[^\s"'<`\]]+[^\s"'<`:\].]+)/g;
+export const URL_PATTERN = /(https?:\/\/+[^\s"'<`\]]+[^\s"'<`:\.]+)/g;
+
 export const LN_URL_PATTERN = /lnurl1[02-9ac-hj-np-z]+/gi;
 export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;
 export const CASHU_TOKEN_PATTERN = /cashuA[A-Za-z0-9_-]+=*/g;
@@ -149,45 +150,70 @@ export function parseNipIdentifier(nipId: string): {
   };
 }
 
-// URL末尾の不要な文字を除去する関数
-export // URL末尾の不要な文字を除去する関数
-const cleanUrlEnd = (url: string): string => {
+//------  URLの末尾から不要な文字を除去する関数
+// 括弧と句読点を混在して処理する
+const brackets: Record<string, string> = {
+  ")": "(",
+  "）": "（",
+  "]": "[",
+  "」": "「",
+  "}": "{",
+  "｝": "｛",
+  ">": "<",
+  "〉": "〈",
+  "』": "『",
+  "》": "《",
+};
+
+const trailingChars = /[.．,，;；:：!！?？→←]/;
+
+// 文字をエスケープするヘルパー関数
+const escapeRegExp = (string: string): string => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+export const cleanUrlEnd = (url: string): string => {
   let cleanedUrl = url;
 
-  // 末尾から不要な文字を除去（句点、記号、括弧など）
-  const trailingChars = /[。．.、,，;；:：!！?？→←）」』】〉》〕\)\]}>]$/;
-
-  while (trailingChars.test(cleanedUrl)) {
+  // 末尾の文字を繰り返しチェック
+  while (cleanedUrl.length > 0) {
     const lastChar = cleanedUrl.slice(-1);
 
-    // 閉じ括弧の場合は対応する開き括弧があるかチェック
-    if (lastChar === ")") {
-      const openCount = (cleanedUrl.match(/\(/g) || []).length;
-      const closeCount = (cleanedUrl.match(/\)/g) || []).length;
-      if (openCount >= closeCount) break; // ペアになっている場合は除去しない
-    } else if (lastChar === "）") {
-      const openCount = (cleanedUrl.match(/（/g) || []).length;
-      const closeCount = (cleanedUrl.match(/）/g) || []).length;
-      if (openCount >= closeCount) break;
-    } else if (lastChar === "」") {
-      const openCount = (cleanedUrl.match(/「/g) || []).length;
-      const closeCount = (cleanedUrl.match(/」/g) || []).length;
-      if (openCount >= closeCount) break;
-    } else if (lastChar === "]") {
-      const openCount = (cleanedUrl.match(/\[/g) || []).length;
-      const closeCount = (cleanedUrl.match(/\]/g) || []).length;
-      if (openCount >= closeCount) break;
-    } else if (lastChar === "}") {
-      const openCount = (cleanedUrl.match(/\{/g) || []).length;
-      const closeCount = (cleanedUrl.match(/\}/g) || []).length;
-      if (openCount >= closeCount) break;
+    // 句読点の場合は即座に除去
+    if (trailingChars.test(lastChar)) {
+      cleanedUrl = cleanedUrl.slice(0, -1);
+      continue;
     }
 
-    cleanedUrl = cleanedUrl.slice(0, -1);
+    // 括弧の場合はペアリングをチェック
+    if (Object.keys(brackets).includes(lastChar)) {
+      const openChar = brackets[lastChar];
+      const escapedOpenChar = escapeRegExp(openChar);
+      const escapedLastChar = escapeRegExp(lastChar);
+
+      const openCount = (
+        cleanedUrl.match(new RegExp(escapedOpenChar, "g")) || []
+      ).length;
+      const closeCount = (
+        cleanedUrl.match(new RegExp(escapedLastChar, "g")) || []
+      ).length;
+
+      // 開き括弧の数が閉じ括弧の数以上であれば、URLの一部とみなして除去を終了
+      if (openCount >= closeCount) {
+        break;
+      }
+
+      cleanedUrl = cleanedUrl.slice(0, -1);
+      continue;
+    }
+
+    // その他の文字の場合は処理を終了
+    break;
   }
 
   return cleanedUrl;
 };
+
+//---------------
 
 // 旧タイプ引用のメタデータを取得する関数
 export function findLegacyReferenceMetadata(
