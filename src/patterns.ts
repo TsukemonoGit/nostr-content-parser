@@ -109,7 +109,7 @@ export const URL_PATTERN = /(https?:\/\/+[^\s"'<`\]]+[^\s"'<`:\.]+)/g;
 
 export const LN_URL_PATTERN = /lnurl1[02-9ac-hj-np-z]+/gi;
 export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;
-export const CASHU_TOKEN_PATTERN = /cashuA[A-Za-z0-9_-]+=*/g;
+export const CASHU_TOKEN_PATTERN = /cashu[AB][A-Za-z0-9_-]+=*/g;
 export const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 export const CUSTOM_EMOJI_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
 export const HASHTAG_PATTERN =
