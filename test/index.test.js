@@ -116,20 +116,23 @@ describe("parseContent - Edge Cases & Mixed Content", () => {
       "Look here (https://en.wikipedia.org). https://example.com/path.) (https://example.com/path.)";
     const tokens = parseContent(content);
     expect(tokens[1].content).toBe("https://en.wikipedia.org");
-    expect(tokens[2].content).toBe(")");
-    expect(tokens[3].content).toBe(". ");
-    expect(tokens[4].content).toBe("https://example.com/path");
-    expect(tokens[7].content).toBe("https://example.com/path");
+    expect(tokens[2].content).toBe("). ");
+    expect(tokens[3].content).toBe("https://example.com/path");
+    expect(tokens[5].content).toBe("https://example.com/path");
   });
 
   it("should handle URLs inside brackets", () => {
-    const content = "[https://booth.pm/ja/items/7660896]";
+    const content = "[https://lumilumi.app/](https://lumilumi.app/)";
     const tokens = parseContent(content);
-    expect(tokens).toHaveLength(3);
+    console.log(tokens)
+    expect(tokens).toHaveLength(5);
     expect(tokens[0].content).toBe("[");
     expect(tokens[1].type).toBe(TokenType.URL);
-    expect(tokens[1].content).toBe("https://booth.pm/ja/items/7660896");
-    expect(tokens[2].content).toBe("]");
+    expect(tokens[1].content).toBe("https://lumilumi.app/");
+    expect(tokens[2].content).toBe("](");
+    expect(tokens[3].type).toBe(TokenType.URL);
+    expect(tokens[3].content).toBe("https://lumilumi.app/");
+    expect(tokens[4].content).toBe(")");
   });
 
   it("should handle URLs with IP addresses and ports", () => {

@@ -98,15 +98,8 @@ function findUrlTokensSync(content: string): Token[] {
     );
 
     if (cleanedUrl !== originalUrl) {
-      const removedPart = originalUrl.slice(cleanedUrl.length);
-      urlTokens.push(
-        createToken(
-          TokenType.TEXT,
-          removedPart,
-          start + cleanedUrl.length,
-          start + originalUrl.length
-        )
-      );
+      // 削除された部分から再度パースを開始するため、lastIndexを調整
+      pattern.lastIndex = start + cleanedUrl.length;
     }
   }
 
@@ -145,15 +138,8 @@ async function findUrlTokensAsync(content: string): Promise<Token[]> {
     );
 
     if (cleanedUrl !== originalUrl) {
-      const removedPart = originalUrl.slice(cleanedUrl.length);
-      urlTokens.push(
-        createToken(
-          TokenType.TEXT,
-          removedPart,
-          start + cleanedUrl.length,
-          start + originalUrl.length
-        )
-      );
+      // 削除された部分から再度パースを開始するため、lastIndexを調整
+      pattern.lastIndex = start + cleanedUrl.length;
     }
   }
 

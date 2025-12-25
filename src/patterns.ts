@@ -105,7 +105,7 @@ export const NIP19_PLAIN_PATTERNS = {
   nsec: /(?<!nostr:)nsec1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
 };
 
-export const URL_PATTERN = /(https?:\/\/+[^\s"'<`]+[^\s"'<`:\.]+)/g;
+export const URL_PATTERN = /(https?:\/\/(?:(?!https?:\/\/)[^\s"'<`])+(?:(?!https?:\/\/)[^\s"'<`:\.\ )\}\({])+)/g;
 
 export const LN_URL_PATTERN = /lnurl1[02-9ac-hj-np-z]+/gi;
 export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;
@@ -171,10 +171,38 @@ const trailingChars = /[.．,，;；:：!！?？→←]/;
 const escapeRegExp = (string: string): string => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
+
 export const cleanUrlEnd = (url: string): string => {
   let cleanedUrl = url;
 
-  // 末尾の文字を繰り返しチェック
+  // まず、URL内の閉じ括弧をスキャンして、バランスが取れていない位置を見つける
+  for (let i = 0; i < cleanedUrl.length; i++) {
+    const char = cleanedUrl[i];
+    
+    if (Object.keys(brackets).includes(char)) {
+      const openChar = brackets[char];
+      const beforePart = cleanedUrl.slice(0, i + 1);
+      
+      const escapedOpenChar = escapeRegExp(openChar);
+      const escapedCloseChar = escapeRegExp(char);
+      
+      const openCount = (
+        beforePart.match(new RegExp(escapedOpenChar, "g")) || []
+      ).length;
+      const closeCount = (
+        beforePart.match(new RegExp(escapedCloseChar, "g")) || []
+      ).length;
+      
+      // 閉じ括弧の数が開き括弧より多い = バランスが崩れている
+      if (closeCount > openCount) {
+        // この閉じ括弧の直前でURLを切る
+        cleanedUrl = cleanedUrl.slice(0, i);
+        break;
+      }
+    }
+  }
+
+  // 次に、末尾の文字を繰り返しチェック（既存のロジック）
   while (cleanedUrl.length > 0) {
     const lastChar = cleanedUrl.slice(-1);
 
