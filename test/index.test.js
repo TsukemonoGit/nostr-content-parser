@@ -122,6 +122,16 @@ describe("parseContent - Edge Cases & Mixed Content", () => {
     expect(tokens[7].content).toBe("https://example.com/path");
   });
 
+  it("should handle URLs inside brackets", () => {
+    const content = "[https://booth.pm/ja/items/7660896]";
+    const tokens = parseContent(content);
+    expect(tokens).toHaveLength(3);
+    expect(tokens[0].content).toBe("[");
+    expect(tokens[1].type).toBe(TokenType.URL);
+    expect(tokens[1].content).toBe("https://booth.pm/ja/items/7660896");
+    expect(tokens[2].content).toBe("]");
+  });
+
   it("should handle URLs with IP addresses and ports", () => {
     const content = "Server address is http://192.168.1.1:8080/api/data";
     const tokens = parseContent(content);

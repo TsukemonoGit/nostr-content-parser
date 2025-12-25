@@ -105,7 +105,7 @@ export const NIP19_PLAIN_PATTERNS = {
   nsec: /(?<!nostr:)nsec1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
 };
 
-export const URL_PATTERN = /(https?:\/\/+[^\s"'<`\]]+[^\s"'<`:\.]+)/g;
+export const URL_PATTERN = /(https?:\/\/+[^\s"'<`]+[^\s"'<`:\.]+)/g;
 
 export const LN_URL_PATTERN = /lnurl1[02-9ac-hj-np-z]+/gi;
 export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;
