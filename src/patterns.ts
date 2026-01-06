@@ -105,7 +105,8 @@ export const NIP19_PLAIN_PATTERNS = {
   nsec: /(?<!nostr:)nsec1[023456789acdefghjklmnpqrstuvwxyz]{58}/g,
 };
 
-export const URL_PATTERN = /(https?:\/\/(?:(?!https?:\/\/)[^\s"'<`])+(?:(?!https?:\/\/)[^\s"'<`:\.\ )\}\({])+)/g;
+export const URL_PATTERN =
+  /(https?:\/\/(?:(?!https?:\/\/)[^\s"'<`])+(?:(?!https?:\/\/)[^\s"'<`:\.\ )\}\({])+)/g;
 
 export const LN_URL_PATTERN = /lnurl1[02-9ac-hj-np-z]+/gi;
 export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;
@@ -167,32 +168,47 @@ const brackets: Record<string, string> = {
 
 const trailingChars = /[.．,，;；:：!！?？→←]/;
 
+// 正規表現のキャッシュ（パフォーマンス改善）
+const bracketRegexCache = new Map<string, RegExp>();
+
 // 文字をエスケープするヘルパー関数
 const escapeRegExp = (string: string): string => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
+// キャッシュされた正規表現を取得（パフォーマンス改善）
+const getCachedRegex = (char: string): RegExp => {
+  if (!bracketRegexCache.has(char)) {
+    bracketRegexCache.set(char, new RegExp(escapeRegExp(char), "g"));
+  }
+  return bracketRegexCache.get(char)!;
+};
+
+// 括弧のカウントをする効率的な関数（パフォーマンス改善）
+const countChar = (str: string, char: string): number => {
+  let count = 0;
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === char) count++;
+  }
+  return count;
+};
+
 export const cleanUrlEnd = (url: string): string => {
   let cleanedUrl = url;
+  let lastLength = -1; // 無限ループ検出用
 
   // まず、URL内の閉じ括弧をスキャンして、バランスが取れていない位置を見つける
   for (let i = 0; i < cleanedUrl.length; i++) {
     const char = cleanedUrl[i];
-    
+
     if (Object.keys(brackets).includes(char)) {
       const openChar = brackets[char];
       const beforePart = cleanedUrl.slice(0, i + 1);
-      
-      const escapedOpenChar = escapeRegExp(openChar);
-      const escapedCloseChar = escapeRegExp(char);
-      
-      const openCount = (
-        beforePart.match(new RegExp(escapedOpenChar, "g")) || []
-      ).length;
-      const closeCount = (
-        beforePart.match(new RegExp(escapedCloseChar, "g")) || []
-      ).length;
-      
+
+      // パフォーマンス改善: 正規表現の代わりに単純なループカウント
+      const openCount = countChar(beforePart, openChar);
+      const closeCount = countChar(beforePart, char);
+
       // 閉じ括弧の数が開き括弧より多い = バランスが崩れている
       if (closeCount > openCount) {
         // この閉じ括弧の直前でURLを切る
@@ -204,6 +220,12 @@ export const cleanUrlEnd = (url: string): string => {
 
   // 次に、末尾の文字を繰り返しチェック（既存のロジック）
   while (cleanedUrl.length > 0) {
+    // 無限ループ検出
+    if (cleanedUrl.length === lastLength) {
+      break; // 長さが変わらない場合は終了
+    }
+    lastLength = cleanedUrl.length;
+
     const lastChar = cleanedUrl.slice(-1);
 
     // 句読点の場合は即座に除去
@@ -215,15 +237,10 @@ export const cleanUrlEnd = (url: string): string => {
     // 括弧の場合はペアリングをチェック
     if (Object.keys(brackets).includes(lastChar)) {
       const openChar = brackets[lastChar];
-      const escapedOpenChar = escapeRegExp(openChar);
-      const escapedLastChar = escapeRegExp(lastChar);
 
-      const openCount = (
-        cleanedUrl.match(new RegExp(escapedOpenChar, "g")) || []
-      ).length;
-      const closeCount = (
-        cleanedUrl.match(new RegExp(escapedLastChar, "g")) || []
-      ).length;
+      // パフォーマンス改善: 正規表現の代わりに単純なループカウント
+      const openCount = countChar(cleanedUrl, openChar);
+      const closeCount = countChar(cleanedUrl, lastChar);
 
       // 開き括弧の数が閉じ括弧の数以上であれば、URLの一部とみなして除去を終了
       if (openCount >= closeCount) {

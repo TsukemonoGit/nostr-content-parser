@@ -80,6 +80,12 @@ function findUrlTokensSync(content: string): Token[] {
     const cleanedUrl = cleanUrlEnd(originalUrl);
     const start = match.index;
     const end = start + cleanedUrl.length;
+
+    // 無限ループ防止: cleanedUrlが空の場合はスキップ
+    if (cleanedUrl.length === 0) {
+      continue;
+    }
+
     const scheme = cleanedUrl.startsWith("https://")
       ? "https"
       : cleanedUrl.startsWith("http://")
@@ -97,9 +103,14 @@ function findUrlTokensSync(content: string): Token[] {
       createToken(TokenType.URL, cleanedUrl, start, end, metadata)
     );
 
+    // originalUrlと異なる場合のみlastIndexを調整（パフォーマンス改善）
     if (cleanedUrl !== originalUrl) {
       // 削除された部分から再度パースを開始するため、lastIndexを調整
-      pattern.lastIndex = start + cleanedUrl.length;
+      const newLastIndex = start + cleanedUrl.length;
+      // 前進していることを保証（無限ループ防止）
+      if (newLastIndex > pattern.lastIndex) {
+        pattern.lastIndex = newLastIndex;
+      }
     }
   }
 
@@ -117,6 +128,12 @@ async function findUrlTokensAsync(content: string): Promise<Token[]> {
     const cleanedUrl = cleanUrlEnd(originalUrl);
     const start = match.index;
     const end = start + cleanedUrl.length;
+
+    // 無限ループ防止: cleanedUrlが空の場合はスキップ
+    if (cleanedUrl.length === 0) {
+      continue;
+    }
+
     const scheme = cleanedUrl.startsWith("https://")
       ? "https"
       : cleanedUrl.startsWith("http://")
@@ -137,9 +154,14 @@ async function findUrlTokensAsync(content: string): Promise<Token[]> {
       createToken(TokenType.URL, cleanedUrl, start, end, metadata)
     );
 
+    // originalUrlと異なる場合のみlastIndexを調整（パフォーマンス改善）
     if (cleanedUrl !== originalUrl) {
       // 削除された部分から再度パースを開始するため、lastIndexを調整
-      pattern.lastIndex = start + cleanedUrl.length;
+      const newLastIndex = start + cleanedUrl.length;
+      // 前進していることを保証（無限ループ防止）
+      if (newLastIndex > pattern.lastIndex) {
+        pattern.lastIndex = newLastIndex;
+      }
     }
   }
 
