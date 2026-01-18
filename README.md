@@ -1,6 +1,6 @@
 # Nostr Content Parser
 
-Parse Nostr content into structured tokens.
+Parse Nostr content into structured tokens with full TypeScript support.
 
 ## Installation
 
@@ -46,6 +46,8 @@ console.log(tokensWithUrlTypes);
 - `TokenType.BITCOIN_ADDRESS` - Bitcoin addresses
 - `TokenType.CASHU_TOKEN` - Cashu tokens
 - `TokenType.NIP_IDENTIFIER` - NIP identifiers
+- `TokenType.LEGACY_REFERENCE` - Legacy references (#[0])
+- `TokenType.RELAY` - Relay URLs (wss://)
 
 ### NIP19 Sub Types
 
@@ -67,9 +69,8 @@ console.log(tokensWithUrlTypes);
 **Parameters:**
 
 - `content: string` – Input content to parse.
-- `tags: string[][]` – Optional tag array (used for custom emoji, etc).
+- `tags: string[][]` – Optional tag array (used for custom emoji, legacy references, etc).
 - `options: object` – Optional settings:
-
   - `includeNostrPrefixOnly?: boolean`
     If `true` (default), only tokens starting with `nostr:` will be included for NIP-19.
     If `false`, plain NIP-19 tokens (without prefix) will also be parsed.
@@ -88,9 +89,8 @@ URL type detection is performed based on file extensions only (fast and lightwei
 **Parameters:**
 
 - `content: string` – Input content to parse.
-- `tags: string[][]` – Optional tag array (used for custom emoji, etc).
+- `tags: string[][]` – Optional tag array (used for custom emoji, legacy references, etc).
 - `options: object` – Optional settings:
-
   - `includeNostrPrefixOnly?: boolean` (same as sync version)
   - `hashtagsFromTagsOnly?: boolean` (same as sync version)
 
@@ -119,6 +119,7 @@ URL type detection includes HTTP HEAD requests to determine content type when fi
 - `getUrls(tokens)` - Get URLs
 - `getCustomEmojis(tokens)` - Get custom emojis
 - `getHashtags(tokens)` - Get hashtags
+- `getValidatedHashtags(tokens)` - Get hashtags validated by t tags
 - `getLightningAddresses(tokens)` - Get Lightning addresses
 - `getLightningUrls(tokens)` - Get Lightning URLs
 - `getLightningInvoices(tokens)` - Get Lightning invoices
@@ -126,6 +127,7 @@ URL type detection includes HTTP HEAD requests to determine content type when fi
 - `getCashuTokens(tokens)` - Get Cashu tokens
 - `getEmails(tokens)` - Get email addresses
 - `getNipIdentifiers(tokens)` - Get NIP identifiers
+- `getLegacyReferences(tokens)` - Get legacy references
 
 ### Utility Functions
 
@@ -146,14 +148,18 @@ const tokens = parseContent("Check out npub1xyz... and #nostr!");
 ```javascript
 // Comprehensive URL type detection
 const content =
-  "Check this image: https://example.com/photo and https://example.com/video.mp4";
+  "Check this image: https://example.com/photo.png and https://example.com/video";
 const tokens = await parseContentAsync(content);
 
 const urls = getUrls(tokens);
 urls.forEach((url) => {
   console.log(`URL: ${url.content}`);
-  console.log(`Scheme: ${url.metadata.scheme}`); // "https", "http"
-  console.log(`Type: ${url.metadata.type}`); // "image", "video", "audio" (if detected)
+  if (url.metadata?.scheme) {
+    console.log(`Scheme: ${url.metadata.scheme}`); // "https", "http"
+  }
+  if (url.metadata?.type) {
+    console.log(`Type: ${url.metadata.type}`); // "image", "video", "audio"
+  }
 });
 ```
 
@@ -185,20 +191,50 @@ const tokens = parseContent(content, tags, {
   hashtagsFromTagsOnly: true,
 });
 
-// Only "#nostr" will be returned as a HASHTAG token
+const hashtags = getHashtags(tokens);
+hashtags.forEach((tag) => {
+  console.log(`Tag: ${tag.metadata.tag}`);
+  console.log(`Validated: ${tag.metadata.validated}`);
+});
+
+// Only "#nostr" will be returned as a validated HASHTAG token
 ```
 
 ### Custom Emoji Handling
 
 ```javascript
-const content = "Hello :custom_emoji:!";
+const content = "Hello :custom_emoji: and :unknown:!";
 const tags = [["emoji", "custom_emoji", "https://example.com/emoji.png"]];
 const tokens = parseContent(content, tags);
 
 const emojis = getCustomEmojis(tokens);
 emojis.forEach((emoji) => {
   console.log(`Name: ${emoji.metadata.name}`);
-  console.log(`URL: ${emoji.metadata.url}`);
+  if (emoji.metadata.hasMetadata) {
+    // TypeScript knows url exists here
+    console.log(`URL: ${emoji.metadata.url}`);
+  } else {
+    console.log("No metadata found in tags");
+  }
+});
+```
+
+### Legacy References
+
+```javascript
+const content = "See #[0] and #[1] for details";
+const tags = [
+  ["p", "npub1xyz..."],
+  ["e", "note1abc..."],
+];
+const tokens = parseContent(content, tags);
+
+const references = getLegacyReferences(tokens);
+references.forEach((ref) => {
+  console.log(`Index: ${ref.metadata.tagIndex}`);
+  console.log(`Type: ${ref.metadata.tagType}`); // "p", "e", etc.
+  console.log(`ID: ${ref.metadata.referenceId}`);
+  console.log(`Reference Type: ${ref.metadata.referenceType}`); // "npub", "note", etc.
 });
 ```
 
@@ -214,46 +250,142 @@ const detailedTokens = await parseContentAsync(content);
 
 ## Token Structure
 
-Each token has the following structure:
+Each token has the following base structure:
 
 ```typescript
-interface Token {
+interface TokenBase {
   type: TokenType;
   content: string;
   start: number;
   end: number;
-  metadata: Record<string, unknown>;
 }
 ```
+
+Tokens are **discriminated unions** - the `type` field determines which metadata fields are available, providing full TypeScript type safety.
 
 ### Metadata Examples
 
 **NIP19 Token:**
 
-```javascript
+```typescript
 {
-  subType: "npub",
-  hasNostrPrefix: true,
-  plainNip19: "npub1xyz..."
+  type: "nip19",
+  content: "nostr:npub1xyz...",
+  start: 0,
+  end: 69,
+  metadata: {
+    subType: "npub",
+    hasNostrPrefix: true,
+    plainNip19: "npub1xyz..."
+  }
 }
 ```
 
-**Custom Emoji Token:**
+**Custom Emoji Token (with metadata):**
 
-```javascript
+```typescript
 {
-  name: "custom_emoji",
-  url: "https://example.com/emoji.png"
+  type: "custom_emoji",
+  content: ":pepe:",
+  start: 0,
+  end: 6,
+  metadata: {
+    name: "pepe",
+    url: "https://example.com/pepe.png",
+    hasMetadata: true
+  }
+}
+```
+
+**Custom Emoji Token (without metadata):**
+
+```typescript
+{
+  type: "custom_emoji",
+  content: ":unknown:",
+  start: 0,
+  end: 9,
+  metadata: {
+    name: "unknown",
+    hasMetadata: false
+  }
 }
 ```
 
 **URL Token:**
 
-```javascript
+```typescript
 {
-  scheme: "https",
-  type: "image" // Only present if detected
+  type: "url",
+  content: "https://example.com/photo.png",
+  start: 0,
+  end: 29,
+  metadata: {
+    scheme: "https",
+    type: "image"  // Optional: only if detected
+  }
 }
+```
+
+**Hashtag Token:**
+
+```typescript
+{
+  type: "hashtag",
+  content: "#nostr",
+  start: 0,
+  end: 6,
+  metadata: {
+    tag: "nostr",
+    validated: true  // true if matched with t tag
+  }
+}
+```
+
+**Legacy Reference Token:**
+
+```typescript
+{
+  type: "legacy_reference",
+  content: "#[0]",
+  start: 0,
+  end: 4,
+  metadata: {
+    tagIndex: 0,
+    tagType: "p",
+    referenceId: "npub1xyz...",
+    referenceType: "npub"  // "npub", "note", "naddr", or "unknown"
+  }
+}
+```
+
+## TypeScript Support
+
+Version 0.7.0 introduces full TypeScript type safety with discriminated unions:
+
+```typescript
+import { parseContent, TokenType } from "@konemono/nostr-content-parser";
+
+const tokens = parseContent("Hello :pepe:");
+
+tokens.forEach((token) => {
+  if (token.type === TokenType.CUSTOM_EMOJI) {
+    // TypeScript knows metadata structure here
+    console.log(token.metadata.name); // Always available
+
+    if (token.metadata.hasMetadata) {
+      // TypeScript knows url exists here
+      console.log(token.metadata.url);
+    }
+  }
+
+  if (token.type === TokenType.NIP19) {
+    // TypeScript knows these fields exist
+    console.log(token.metadata.plainNip19);
+    console.log(token.metadata.subType);
+    console.log(token.metadata.hasNostrPrefix);
+  }
+});
 ```
 
 ## Commands
@@ -273,4 +405,45 @@ npm run prepublishOnly
 
 # Publish to npm
 npm publish
+```
+
+## Changelog
+
+### 0.7.0 (Breaking Changes)
+
+**Type System Overhaul:**
+
+- Complete TypeScript rewrite with discriminated unions for type-safe token handling
+- Token metadata is now strongly typed based on token type
+- Breaking: Custom emoji tokens are now always created (with `hasMetadata` flag to distinguish between tagged and untagged emojis)
+- Breaking: Legacy reference tokens are only created when tags exist (out-of-bounds references are treated as text)
+
+**New Features:**
+
+- `LEGACY_REFERENCE` token type for parsing `#[0]` style references
+- `RELAY` token type for WebSocket relay URLs
+- Full metadata type safety - TypeScript now knows exactly which fields exist for each token type
+
+**Improvements:**
+
+- Custom emoji handling: Both tagged and untagged emojis are now recognized
+- URL type detection restored with proper typing (`"image" | "video" | "audio"`)
+- Hashtag metadata now includes `validated` field to distinguish t-tag validated hashtags
+- Better discriminated union support for token filtering functions
+
+**Migration Guide:**
+
+```typescript
+// Before (0.6.x)
+const emoji = tokens.find((t) => t.type === "custom_emoji");
+if (emoji.metadata.url) {
+  /* ... */
+}
+
+// After (0.7.0)
+const emoji = tokens.find((t) => t.type === "custom_emoji");
+if (emoji.metadata.hasMetadata) {
+  // TypeScript knows url exists here
+  console.log(emoji.metadata.url);
+}
 ```

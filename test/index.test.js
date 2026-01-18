@@ -11,7 +11,7 @@ import {
   parseNipIdentifier,
   findLegacyReferenceMetadata,
   cleanUrlEnd,
-  TokenType, // patterns.ts からの TokenType を区別するために別名でインポート
+  TokenType,
 } from "../src/patterns";
 
 // Test data
@@ -24,7 +24,6 @@ const TEST_NEVENT =
 const TEST_NPROFILE =
   "nprofile1qyxhwumn8ghj77tpvf6jumt9qqsgfvxyd2mfntp4avk29pj8pwz7pqwmyzrummmrjv3rdsuhg9mc9agccpc2g";
 
-//
 describe("parseContent - Core Functionality", () => {
   beforeEach(() => {
     resetPatterns();
@@ -39,7 +38,7 @@ describe("parseContent - Core Functionality", () => {
         content: "Hello world!",
         start: 0,
         end: 12,
-        metadata: {},
+        // metadata は undefined (プロパティ自体が存在しない)
       },
     ]);
   });
@@ -82,11 +81,22 @@ describe("parseContent - Core Functionality", () => {
     const content = "Hello :pepe: world :unknown_emoji:";
     const tags = [["emoji", "pepe", "https://example.com/pepe.png"]];
     const tokens = parseContent(content, tags);
-    expect(
-      tokens.filter((t) => t.type === TokenType.CUSTOM_EMOJI)
-    ).toHaveLength(2);
-    expect(tokens[1].metadata.url).toBe("https://example.com/pepe.png");
-    expect(tokens[3].metadata.url).toBeUndefined();
+    // タグありでもなしでもカスタム絵文字トークンを作成
+    const customEmojis = tokens.filter(
+      (t) => t.type === TokenType.CUSTOM_EMOJI,
+    );
+    expect(customEmojis).toHaveLength(2);
+
+    // タグあり
+    expect(customEmojis[0].metadata.hasMetadata).toBe(true);
+    if (customEmojis[0].metadata.hasMetadata) {
+      expect(customEmojis[0].metadata.url).toBe("https://example.com/pepe.png");
+      expect(customEmojis[0].metadata.name).toBe("pepe");
+    }
+
+    // タグなし
+    expect(customEmojis[1].metadata.hasMetadata).toBe(false);
+    expect(customEmojis[1].metadata.name).toBe("unknown_emoji");
   });
 
   it("should parse hashtags", () => {
@@ -124,7 +134,7 @@ describe("parseContent - Edge Cases & Mixed Content", () => {
   it("should handle URLs inside brackets", () => {
     const content = "[https://lumilumi.app/](https://lumilumi.app/)";
     const tokens = parseContent(content);
-    console.log(tokens)
+    console.log(tokens);
     expect(tokens).toHaveLength(5);
     expect(tokens[0].content).toBe("[");
     expect(tokens[1].type).toBe(TokenType.URL);
@@ -141,7 +151,6 @@ describe("parseContent - Edge Cases & Mixed Content", () => {
     expect(tokens[1].content).toBe("http://192.168.1.1:8080/api/data");
   });
 
-  // URLの直後に絵文字が続く場合は特殊だからとりあえずいいかぁ ポート番号で:つくことあってむずそうだし
   it.skip("should separate URL and custom emoji correctly", () => {
     const content = "This is great! http://example.org/:great_emoji:";
     const tags = [["emoji", "great_emoji", "https://example.org/great.png"]];
@@ -177,7 +186,7 @@ describe("parseContent - Cryptocurrency Parsing", () => {
       "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa or bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
     const tokens = parseContent(content);
     const btcAddresses = tokens.filter(
-      (t) => t.type === TokenType.BITCOIN_ADDRESS
+      (t) => t.type === TokenType.BITCOIN_ADDRESS,
     );
     expect(btcAddresses).toHaveLength(2);
     expect(btcAddresses[0].metadata.addressType).toBe("legacy");
@@ -224,7 +233,7 @@ describe("parseContent - New Patterns & Special Cases", () => {
     ];
     const tokens = parseContent(content, tags);
     const legacyToken = tokens.find(
-      (t) => t.type === TokenType.LEGACY_REFERENCE
+      (t) => t.type === TokenType.LEGACY_REFERENCE,
     );
     expect(legacyToken).toBeDefined();
     expect(legacyToken.content).toBe("#[0]");
@@ -236,12 +245,17 @@ describe("parseContent - New Patterns & Special Cases", () => {
     const content = "Check out #[99] which does not exist.";
     const tags = [["p", TEST_NPUB]];
     const tokens = parseContent(content, tags);
+    // 範囲外の場合はトークンが作成されない (TEXTとして扱われる)
     const legacyToken = tokens.find(
-      (t) => t.type === TokenType.LEGACY_REFERENCE
+      (t) => t.type === TokenType.LEGACY_REFERENCE,
     );
-    expect(legacyToken).toBeDefined();
-    expect(legacyToken.metadata.tagIndex).toBe(99);
-    expect(legacyToken.metadata.tagType).toBeUndefined();
+    expect(legacyToken).toBeUndefined();
+    // #[99] はTEXTとして存在する
+    expect(
+      tokens.some(
+        (t) => t.type === TokenType.TEXT && t.content.includes("#[99]"),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -250,6 +264,7 @@ describe("parseContent - Media Type Detection", () => {
     const content = "This is an image: https://example.com/photo.png";
     const tokens = parseContent(content);
     const urlToken = tokens.find((t) => t.type === TokenType.URL);
+    expect(urlToken).toBeDefined();
     expect(urlToken?.metadata?.type).toBe("image");
   });
 
@@ -263,6 +278,7 @@ describe("parseContent - Media Type Detection", () => {
     const content = "https://example.com/videofile";
     const tokens = await parseContentAsync(content);
     const urlToken = tokens.find((t) => t.type === TokenType.URL);
+    expect(urlToken).toBeDefined();
     expect(urlToken?.metadata?.type).toBe("video");
     expect(globalThis.fetch).toHaveBeenCalledWith(content, { method: "HEAD" });
   });
@@ -310,7 +326,7 @@ describe("Utility Functions", () => {
   it("should find custom emoji metadata from tags", () => {
     const tags = [["emoji", "pepe", "https://example.com/pepe.png"]];
     expect(findCustomEmojiMetadata("pepe", tags)?.url).toBe(
-      "https://example.com/pepe.png"
+      "https://example.com/pepe.png",
     );
     expect(findCustomEmojiMetadata("unknown", tags)).toBeNull();
   });
@@ -344,25 +360,25 @@ describe("Utility Functions", () => {
     expect(metadataE?.referenceId).toBe(TEST_NOTE);
     expect(metadataE?.referenceType).toBe("note");
 
+    // 範囲外の場合はnullを返す
     const metadataOutOfBounds = findLegacyReferenceMetadata("#[99]", tags);
-    expect(metadataOutOfBounds?.tagIndex).toBe(99);
-    expect(metadataOutOfBounds?.tagType).toBeUndefined();
+    expect(metadataOutOfBounds).toBeNull();
   });
 
   it("should clean trailing characters from URL", () => {
     expect(cleanUrlEnd("https://example.com.")).toBe("https://example.com");
     expect(cleanUrlEnd("https://example.com/path).")).toBe(
-      "https://example.com/path"
+      "https://example.com/path",
     );
     expect(cleanUrlEnd("https://example.com/test?a=1]")).toBe(
-      "https://example.com/test?a=1"
+      "https://example.com/test?a=1",
     );
     expect(cleanUrlEnd("https://example.com/path...")).toBe(
-      "https://example.com/path"
+      "https://example.com/path",
     );
 
     expect(cleanUrlEnd("http://nostr.com/path.note1.")).toBe(
-      "http://nostr.com/path.note1"
+      "http://nostr.com/path.note1",
     );
   });
 });

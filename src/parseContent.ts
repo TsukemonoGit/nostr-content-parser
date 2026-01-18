@@ -1,8 +1,7 @@
-// 修正版 parseContent.ts - ハッシュタグオプション追加
+// 型安全版 parseContent.ts
 import {
   NIP19_PATTERNS,
   URL_PATTERN,
-  TokenType,
   LN_URL_PATTERN,
   LNBC_PATTERN,
   CASHU_TOKEN_PATTERN,
@@ -13,7 +12,9 @@ import {
   LN_ADDRESS_PATTERN,
   NIP19_PLAIN_PATTERNS,
   NIP_IDENTIFIER_PATTERN,
-  Token,
+  TokenType,
+  type Token,
+  type TokenTypeValue,
   parseNipIdentifier,
   isLightningAddress,
   findCustomEmojiMetadata,
@@ -25,26 +26,122 @@ import {
   findLegacyReferenceMetadata,
 } from "./patterns.js";
 
-function createToken(
-  type: TokenType,
+// 型安全なトークン作成関数群
+function createNip19Token(
   content: string,
   start: number,
   end: number,
-  metadata: Record<string, unknown> = {}
+  plainNip19: string,
+  subType: NIP19SubType,
+  hasNostrPrefix: boolean,
 ): Token {
-  return { type, content, start, end, metadata };
+  return {
+    type: TokenType.NIP19,
+    content,
+    start,
+    end,
+    metadata: { plainNip19, subType, hasNostrPrefix },
+  };
+}
+
+function createNipIdentifierToken(
+  content: string,
+  start: number,
+  end: number,
+  number: string,
+): Token {
+  return {
+    type: TokenType.NIP_IDENTIFIER,
+    content,
+    start,
+    end,
+    metadata: { number },
+  };
+}
+
+function createCustomEmojiToken(
+  content: string,
+  start: number,
+  end: number,
+  name: string,
+  url?: string,
+): Token {
+  if (url) {
+    return {
+      type: TokenType.CUSTOM_EMOJI,
+      content,
+      start,
+      end,
+      metadata: { url, name, hasMetadata: true },
+    };
+  } else {
+    return {
+      type: TokenType.CUSTOM_EMOJI,
+      content,
+      start,
+      end,
+      metadata: { name, hasMetadata: false },
+    };
+  }
+}
+
+function createHashtagToken(
+  content: string,
+  start: number,
+  end: number,
+  tag: string,
+  validated: boolean,
+): Token {
+  return {
+    type: TokenType.HASHTAG,
+    content,
+    start,
+    end,
+    metadata: { tag, validated },
+  };
+}
+
+function createUrlToken(
+  content: string,
+  start: number,
+  end: number,
+  scheme?: string,
+  type?: "image" | "video" | "audio",
+): Token {
+  const metadata: { scheme?: string; type?: "image" | "video" | "audio" } = {};
+  if (scheme) metadata.scheme = scheme;
+  if (type) metadata.type = type;
+
+  return {
+    type: TokenType.URL,
+    content,
+    start,
+    end,
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+  };
+}
+
+function createSimpleToken(
+  type: "text" | "ln_url" | "lnbc",
+  content: string,
+  start: number,
+  end: number,
+): Token {
+  return { type, content, start, end };
 }
 
 function isOverlapping(
   start1: number,
   end1: number,
   start2: number,
-  end2: number
+  end2: number,
 ): boolean {
   return start1 < end2 && start2 < end1;
 }
 
-function detectUrlTypeFromExtension(url: string): string | undefined {
+function detectUrlTypeFromExtension(
+  url: string,
+): "image" | "video" | "audio" | undefined {
   const ext = url.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase();
   if (!ext) return;
 
@@ -58,7 +155,34 @@ function detectUrlTypeFromExtension(url: string): string | undefined {
   return;
 }
 
-// tタグからハッシュタグセットを作成
+const urlTypeCache = new Map<string, "image" | "video" | "audio">();
+
+async function fetchUrlContentType(
+  url: string,
+): Promise<"image" | "video" | "audio" | undefined> {
+  if (urlTypeCache.has(url)) {
+    return urlTypeCache.get(url);
+  }
+
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    const contentType = res.headers.get("Content-Type") || "";
+    let type: "image" | "video" | "audio" | undefined;
+
+    if (contentType.startsWith("video/")) type = "video";
+    else if (contentType.startsWith("audio/")) type = "audio";
+    else if (contentType.startsWith("image/")) type = "image";
+
+    if (type) {
+      urlTypeCache.set(url, type);
+    }
+
+    return type;
+  } catch {
+    return undefined;
+  }
+}
+
 function extractHashtagsFromTags(tags: string[][]): Set<string> {
   const hashtags = new Set<string>();
   for (const tag of tags) {
@@ -69,7 +193,6 @@ function extractHashtagsFromTags(tags: string[][]): Set<string> {
   return hashtags;
 }
 
-// 同期版：拡張子ベースの判定のみ
 function findUrlTokensSync(content: string): Token[] {
   const urlTokens: Token[] = [];
   const pattern = new RegExp(URL_PATTERN.source, URL_PATTERN.flags);
@@ -81,7 +204,6 @@ function findUrlTokensSync(content: string): Token[] {
     const start = match.index;
     const end = start + cleanedUrl.length;
 
-    // 無限ループ防止: cleanedUrlが空の場合はスキップ
     if (cleanedUrl.length === 0) {
       continue;
     }
@@ -89,25 +211,17 @@ function findUrlTokensSync(content: string): Token[] {
     const scheme = cleanedUrl.startsWith("https://")
       ? "https"
       : cleanedUrl.startsWith("http://")
-      ? "http"
-      : null;
-
-    const metadata: Record<string, unknown> = { scheme };
+        ? "http"
+        : undefined;
 
     const detectedType = detectUrlTypeFromExtension(cleanedUrl);
-    if (detectedType) {
-      metadata.type = detectedType;
-    }
 
     urlTokens.push(
-      createToken(TokenType.URL, cleanedUrl, start, end, metadata)
+      createUrlToken(cleanedUrl, start, end, scheme, detectedType),
     );
 
-    // originalUrlと異なる場合のみlastIndexを調整（パフォーマンス改善）
     if (cleanedUrl !== originalUrl) {
-      // 削除された部分から再度パースを開始するため、lastIndexを調整
       const newLastIndex = start + cleanedUrl.length;
-      // 前進していることを保証（無限ループ防止）
       if (newLastIndex > pattern.lastIndex) {
         pattern.lastIndex = newLastIndex;
       }
@@ -117,7 +231,6 @@ function findUrlTokensSync(content: string): Token[] {
   return urlTokens;
 }
 
-// 非同期版：HTTPヘッダーも確認
 async function findUrlTokensAsync(content: string): Promise<Token[]> {
   const urlTokens: Token[] = [];
   const pattern = new RegExp(URL_PATTERN.source, URL_PATTERN.flags);
@@ -129,7 +242,6 @@ async function findUrlTokensAsync(content: string): Promise<Token[]> {
     const start = match.index;
     const end = start + cleanedUrl.length;
 
-    // 無限ループ防止: cleanedUrlが空の場合はスキップ
     if (cleanedUrl.length === 0) {
       continue;
     }
@@ -137,28 +249,22 @@ async function findUrlTokensAsync(content: string): Promise<Token[]> {
     const scheme = cleanedUrl.startsWith("https://")
       ? "https"
       : cleanedUrl.startsWith("http://")
-      ? "http"
-      : null;
+        ? "http"
+        : undefined;
 
-    const metadata: Record<string, unknown> = { scheme };
+    let detectedType = detectUrlTypeFromExtension(cleanedUrl);
 
-    const detectedType = detectUrlTypeFromExtension(cleanedUrl);
-    if (detectedType) {
-      metadata.type = detectedType;
-    } else {
+    if (!detectedType) {
       const fetchedType = await fetchUrlContentType(cleanedUrl);
-      if (fetchedType) metadata.type = fetchedType;
+      if (fetchedType) detectedType = fetchedType;
     }
 
     urlTokens.push(
-      createToken(TokenType.URL, cleanedUrl, start, end, metadata)
+      createUrlToken(cleanedUrl, start, end, scheme, detectedType),
     );
 
-    // originalUrlと異なる場合のみlastIndexを調整（パフォーマンス改善）
     if (cleanedUrl !== originalUrl) {
-      // 削除された部分から再度パースを開始するため、lastIndexを調整
       const newLastIndex = start + cleanedUrl.length;
-      // 前進していることを保証（無限ループ防止）
       if (newLastIndex > pattern.lastIndex) {
         pattern.lastIndex = newLastIndex;
       }
@@ -168,93 +274,11 @@ async function findUrlTokensAsync(content: string): Promise<Token[]> {
   return urlTokens;
 }
 
-const PATTERN_CONFIGS = [
-  {
-    patterns: { nip_identifier: NIP_IDENTIFIER_PATTERN },
-    handler: (match: RegExpExecArray, type: string) => {
-      try {
-        const nipInfo = parseNipIdentifier(match[0]);
-        return { type: TokenType.NIP_IDENTIFIER, metadata: nipInfo };
-      } catch {
-        return null;
-      }
-    },
-  },
-  {
-    patterns: { legacy_reference: LEGACY_REFERENCE_PATTERN },
-    handler: (match: RegExpExecArray, type: string, tags: string[][]) => {
-      const metadata = findLegacyReferenceMetadata(match[0], tags);
-      return {
-        type: TokenType.LEGACY_REFERENCE,
-        metadata: metadata || { tagIndex: -1 },
-      };
-    },
-  },
-  {
-    patterns: { [TokenType.RELAY]: RELAY_URL_PATTERN },
-    handler: (match: RegExpExecArray, type: string, tags: string[][]) => {
-      const url = match[0];
-      const scheme = url.startsWith("wss://")
-        ? "wss"
-        : url.startsWith("ws://")
-        ? "ws"
-        : null;
-
-      return {
-        type: TokenType.RELAY,
-        metadata: scheme ? { scheme } : {},
-      };
-    },
-  },
-  {
-    patterns: { ln_url: LN_URL_PATTERN },
-    handler: () => ({ type: TokenType.LN_URL }),
-  },
-
-  {
-    patterns: { lnbc: LNBC_PATTERN },
-    handler: () => ({ type: TokenType.LNBC }),
-  },
-  {
-    patterns: { cashu_token: CASHU_TOKEN_PATTERN },
-    handler: () => ({ type: TokenType.CASHU_TOKEN }),
-  },
-  {
-    patterns: BITCOIN_ADDRESS_PATTERNS,
-    handler: (match: RegExpExecArray, addressType: string) => ({
-      type: TokenType.BITCOIN_ADDRESS,
-      metadata: { addressType },
-    }),
-  },
-  {
-    patterns: { email: EMAIL_PATTERN },
-    handler: (match: RegExpExecArray) => {
-      const emailLike = match[0];
-      const isLN = isLightningAddress(emailLike);
-      return {
-        type: isLN ? TokenType.LN_ADDRESS : TokenType.EMAIL,
-        metadata: isLN ? { domain: emailLike.split("@")[1] } : {},
-      };
-    },
-  },
-  {
-    patterns: { custom_emoji: CUSTOM_EMOJI_PATTERN },
-    handler: (match: RegExpExecArray, type: string, tags: string[][]) => {
-      const emojiName = match[1];
-      const metadata = findCustomEmojiMetadata(emojiName, tags);
-      return {
-        type: TokenType.CUSTOM_EMOJI,
-        metadata: { name: emojiName, ...metadata },
-      };
-    },
-  },
-];
-
 function processNip19Patterns(
   content: string,
   patterns: typeof NIP19_PATTERNS,
   matches: Token[],
-  protectedRanges: Token[]
+  protectedRanges: Token[],
 ): void {
   Object.entries(patterns).forEach(([oldType, rawPattern]) => {
     const pattern = new RegExp(rawPattern.source, rawPattern.flags);
@@ -264,25 +288,27 @@ function processNip19Patterns(
       const start = match.index;
       const end = start + matchedContent.length;
 
-      // 既存のマッチとの重複チェック
       const hasOverlap = matches.some((m) =>
-        isOverlapping(start, end, m.start, m.end)
+        isOverlapping(start, end, m.start, m.end),
       );
 
-      // 保護された範囲（URL等）との重複チェック
       const isInProtectedRange = protectedRanges.some((p) =>
-        isOverlapping(start, end, p.start, p.end)
+        isOverlapping(start, end, p.start, p.end),
       );
 
       if (!hasOverlap && !isInProtectedRange) {
-        // NIP19統合: subTypeをmetadataに格納
-        const subType = NIP19_TYPE_MAP[oldType] || oldType;
+        const hasNostrPrefix = matchedContent.startsWith("nostr:");
+        const plainNip19 = matchedContent.replace(/^nostr:/, "");
+        const subType = (NIP19_TYPE_MAP[oldType] || oldType) as NIP19SubType;
         matches.push(
-          createToken(TokenType.NIP19, matchedContent, start, end, {
-            subType: subType,
-            hasNostrPrefix: matchedContent.startsWith("nostr:"),
-            plainNip19: matchedContent.replace(/^nostr:/, ""),
-          })
+          createNip19Token(
+            matchedContent,
+            start,
+            end,
+            plainNip19,
+            subType,
+            hasNostrPrefix,
+          ),
         );
       }
     }
@@ -294,47 +320,258 @@ function processPatterns(
   matches: Token[],
   tags: string[][] = [],
   protectedRanges: Token[] = [],
-  hashtagsFromTagsOnly: boolean = true
+  hashtagsFromTagsOnly: boolean = true,
 ): void {
   const validHashtags = hashtagsFromTagsOnly
     ? extractHashtagsFromTags(tags)
     : null;
 
-  for (const config of PATTERN_CONFIGS) {
-    for (const [patternType, rawPattern] of Object.entries(config.patterns)) {
+  // NIP_IDENTIFIER
+  {
+    const pattern = new RegExp(
+      NIP_IDENTIFIER_PATTERN.source,
+      NIP_IDENTIFIER_PATTERN.flags,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      try {
+        const nipInfo = parseNipIdentifier(match[0]);
+        matches.push(
+          createNipIdentifierToken(match[0], start, end, nipInfo.number),
+        );
+      } catch {
+        // パース失敗時はスキップ
+      }
+    }
+  }
+
+  // LEGACY_REFERENCE
+  {
+    const pattern = new RegExp(
+      LEGACY_REFERENCE_PATTERN.source,
+      LEGACY_REFERENCE_PATTERN.flags,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      const metadata = findLegacyReferenceMetadata(match[0], tags);
+      if (metadata) {
+        matches.push({
+          type: TokenType.LEGACY_REFERENCE,
+          content: match[0],
+          start,
+          end,
+          metadata,
+        } as Token);
+      }
+    }
+  }
+
+  // RELAY
+  {
+    const pattern = new RegExp(
+      RELAY_URL_PATTERN.source,
+      RELAY_URL_PATTERN.flags,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      const url = match[0];
+      const scheme = url.startsWith("wss://")
+        ? "wss"
+        : url.startsWith("ws://")
+          ? "ws"
+          : "wss";
+
+      matches.push({
+        type: TokenType.RELAY,
+        content: match[0],
+        start,
+        end,
+        metadata: { scheme },
+      } as Token);
+    }
+  }
+
+  // LN_URL
+  {
+    const pattern = new RegExp(LN_URL_PATTERN.source, LN_URL_PATTERN.flags);
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      matches.push(createSimpleToken(TokenType.LN_URL, match[0], start, end));
+    }
+  }
+
+  // LNBC
+  {
+    const pattern = new RegExp(LNBC_PATTERN.source, LNBC_PATTERN.flags);
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      matches.push(createSimpleToken(TokenType.LNBC, match[0], start, end));
+    }
+  }
+
+  // CASHU_TOKEN
+  {
+    const pattern = new RegExp(
+      CASHU_TOKEN_PATTERN.source,
+      CASHU_TOKEN_PATTERN.flags,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      matches.push({
+        type: TokenType.CASHU_TOKEN,
+        content: match[0],
+        start,
+        end,
+      } as Token);
+    }
+  }
+
+  // BITCOIN_ADDRESS
+  {
+    for (const [addressType, rawPattern] of Object.entries(
+      BITCOIN_ADDRESS_PATTERNS,
+    )) {
       const pattern = new RegExp(rawPattern.source, rawPattern.flags);
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(content)) !== null) {
         const start = match.index;
         const end = start + match[0].length;
 
-        // 既存のマッチとの重複チェック
         if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
           continue;
-
-        // 保護された範囲との重複チェック
         if (
           protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
         )
           continue;
 
-        const result = config.handler(match, patternType, tags);
-        if (result) {
-          matches.push(
-            createToken(
-              result.type,
-              match[0],
-              start,
-              end,
-              "metadata" in result ? result.metadata : {}
-            )
-          );
-        }
+        matches.push({
+          type: TokenType.BITCOIN_ADDRESS,
+          content: match[0],
+          start,
+          end,
+          metadata: { addressType },
+        } as Token);
       }
     }
   }
 
-  // ハッシュタグの処理（別途処理）
+  // EMAIL / LN_ADDRESS
+  {
+    const pattern = new RegExp(EMAIL_PATTERN.source, EMAIL_PATTERN.flags);
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      const emailLike = match[0];
+      const isLN = isLightningAddress(emailLike);
+
+      matches.push({
+        type: isLN ? TokenType.LN_ADDRESS : TokenType.EMAIL,
+        content: match[0],
+        start,
+        end,
+        ...(isLN ? { metadata: { domain: emailLike.split("@")[1] } } : {}),
+      } as Token);
+    }
+  }
+
+  // CUSTOM_EMOJI
+  {
+    const pattern = new RegExp(
+      CUSTOM_EMOJI_PATTERN.source,
+      CUSTOM_EMOJI_PATTERN.flags,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
+        continue;
+      if (
+        protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end))
+      )
+        continue;
+
+      const emojiName = match[1];
+      const metadata = findCustomEmojiMetadata(emojiName, tags);
+
+      // タグありでもなしでもカスタム絵文字トークンを作成
+      matches.push(
+        createCustomEmojiToken(match[0], start, end, emojiName, metadata?.url),
+      );
+    }
+  }
+
+  // HASHTAG
   processHashtagPatterns(content, matches, protectedRanges, validHashtags);
 }
 
@@ -342,7 +579,7 @@ function processHashtagPatterns(
   content: string,
   matches: Token[],
   protectedRanges: Token[],
-  validHashtags: Set<string> | null
+  validHashtags: Set<string> | null,
 ): void {
   const pattern = new RegExp(HASHTAG_PATTERN.source, HASHTAG_PATTERN.flags);
   let match: RegExpExecArray | null;
@@ -350,56 +587,44 @@ function processHashtagPatterns(
   while ((match = pattern.exec(content)) !== null) {
     const start = match.index;
     const end = start + match[0].length;
-    const hashtag = match[0].slice(1); // # を除去
+    const hashtag = match[0].slice(1);
 
-    // 既存のマッチとの重複チェック
     if (matches.some((m) => isOverlapping(start, end, m.start, m.end)))
       continue;
-
-    // 保護された範囲との重複チェック
     if (protectedRanges.some((p) => isOverlapping(start, end, p.start, p.end)))
       continue;
 
-    // tタグ検証が有効な場合のチェック
     if (validHashtags && !validHashtags.has(hashtag.toLowerCase())) {
       continue;
     }
 
     matches.push(
-      createToken(TokenType.HASHTAG, match[0], start, end, {
-        tag: hashtag,
-        validated: validHashtags !== null,
-      })
+      createHashtagToken(match[0], start, end, hashtag, validHashtags !== null),
     );
   }
 }
 
-//重なったトークン同士があったとき、どちらを優先するか
-const PRIORITY: Record<TokenType, number> = {
+const PRIORITY: Record<TokenTypeValue, number> = {
   [TokenType.URL]: 15,
   [TokenType.NIP19]: 10,
-
   [TokenType.RELAY]: 10,
   [TokenType.CASHU_TOKEN]: 2,
   [TokenType.LNBC]: 2,
   [TokenType.LN_URL]: 2,
   [TokenType.LN_ADDRESS]: 2,
-
   [TokenType.CUSTOM_EMOJI]: 1,
   [TokenType.BITCOIN_ADDRESS]: 1,
   [TokenType.EMAIL]: 1,
   [TokenType.LEGACY_REFERENCE]: 1,
-
   [TokenType.HASHTAG]: 0,
   [TokenType.NIP_IDENTIFIER]: 0,
-
   [TokenType.TEXT]: 0,
 };
 
 function removeOverlaps(matches: Token[]): Token[] {
   const sorted = [...matches].sort((a, b) => {
     if (a.start !== b.start) return a.start - b.start;
-    if (a.end !== b.end) return b.end - a.end; // 長い方を先に
+    if (a.end !== b.end) return b.end - a.end;
     return (PRIORITY[b.type] ?? 0) - (PRIORITY[a.type] ?? 0);
   });
 
@@ -407,18 +632,15 @@ function removeOverlaps(matches: Token[]): Token[] {
 
   for (const token of sorted) {
     const overlapIndex = result.findIndex((t) =>
-      isOverlapping(t.start, t.end, token.start, token.end)
+      isOverlapping(t.start, t.end, token.start, token.end),
     );
 
     if (overlapIndex === -1) {
       result.push(token);
     } else {
       const existing = result[overlapIndex];
-
       const tokenPriority = PRIORITY[token.type] ?? 0;
       const existingPriority = PRIORITY[existing.type] ?? 0;
-
-      // 同じ位置でも「より外側のトークンを優先」
       const tokenLength = token.end - token.start;
       const existingLength = existing.end - existing.start;
 
@@ -429,28 +651,26 @@ function removeOverlaps(matches: Token[]): Token[] {
       if (shouldReplace) {
         result.splice(overlapIndex, 1, token);
       }
-      // else: skip token
     }
   }
 
-  return result.sort((a, b) => a.start - b.start); // 再整列
+  return result.sort((a, b) => a.start - b.start);
 }
 
 function buildTokens(content: string, matches: Token[]): Token[] {
   const filteredMatches = removeOverlaps(matches);
 
-  // テキストトークンを挿入
   const tokens: Token[] = [];
   let currentPos = 0;
   for (const match of filteredMatches) {
     if (match.start > currentPos) {
       tokens.push(
-        createToken(
+        createSimpleToken(
           TokenType.TEXT,
           content.slice(currentPos, match.start),
           currentPos,
-          match.start
-        )
+          match.start,
+        ),
       );
     }
     tokens.push(match);
@@ -458,12 +678,12 @@ function buildTokens(content: string, matches: Token[]): Token[] {
   }
   if (currentPos < content.length) {
     tokens.push(
-      createToken(
+      createSimpleToken(
         TokenType.TEXT,
         content.slice(currentPos),
         currentPos,
-        content.length
-      )
+        content.length,
+      ),
     );
   }
   return tokens;
@@ -474,59 +694,51 @@ export interface ParseOptions {
   hashtagsFromTagsOnly?: boolean;
 }
 
-// 同期版：detectUrlType = falseの場合
 export function parseContent(
   content: string,
   tags: string[][] = [],
-  options: ParseOptions = {}
+  options: ParseOptions = {},
 ): Token[] {
   if (!content) return [];
   const { includeNostrPrefixOnly = true, hashtagsFromTagsOnly = true } =
     options;
 
-  // URLを検出（拡張子ベースのみ）
   const urlTokens = findUrlTokensSync(content);
 
-  // NIP-19パターンを処理（URLの範囲を除外）
   processNip19Patterns(content, NIP19_PATTERNS, urlTokens, urlTokens);
   if (!includeNostrPrefixOnly) {
     processNip19Patterns(content, NIP19_PLAIN_PATTERNS, urlTokens, urlTokens);
   }
 
-  // その他のパターンを処理（URLの範囲を除外）
   processPatterns(content, urlTokens, tags, urlTokens, hashtagsFromTagsOnly);
 
   return buildTokens(content, urlTokens);
 }
 
-// 非同期版：detectUrlType = trueの場合
 export async function parseContentAsync(
   content: string,
   tags: string[][] = [],
-  options: ParseOptions = {}
+  options: ParseOptions = {},
 ): Promise<Token[]> {
   if (!content) return [];
   const { includeNostrPrefixOnly = true, hashtagsFromTagsOnly = true } =
     options;
 
-  // URLを検出（HTTPヘッダーも確認）
   const urlTokens = await findUrlTokensAsync(content);
 
-  // NIP-19パターンを処理（URLの範囲を除外）
   processNip19Patterns(content, NIP19_PATTERNS, urlTokens, urlTokens);
   if (!includeNostrPrefixOnly) {
     processNip19Patterns(content, NIP19_PLAIN_PATTERNS, urlTokens, urlTokens);
   }
 
-  // その他のパターンを処理（URLの範囲を除外）
   processPatterns(content, urlTokens, tags, urlTokens, hashtagsFromTagsOnly);
 
   return buildTokens(content, urlTokens);
 }
 
-export function filterTokens<T extends TokenType>(
+export function filterTokens<T extends TokenTypeValue>(
   tokens: Token[],
-  types: T | T[]
+  types: T | T[],
 ): Token[] {
   const typeSet = new Set(Array.isArray(types) ? types : [types]);
   return tokens.filter((token) => typeSet.has(token.type as T));
@@ -534,31 +746,26 @@ export function filterTokens<T extends TokenType>(
 
 export function filterTokensBy(
   tokens: Token[],
-  predicate: (token: Token) => boolean
+  predicate: (token: Token) => boolean,
 ): Token[] {
   return tokens.filter(predicate);
 }
 
-// NIP19統合後のフィルター関数
 export function getNip19Entities(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.NIP19);
 }
 
-// 特定のNIP19サブタイプでフィルター
 export function filterNip19BySubType(
   tokens: Token[],
-  subType: NIP19SubType | NIP19SubType[]
+  subType: NIP19SubType | NIP19SubType[],
 ): Token[] {
   const subTypeSet = new Set(Array.isArray(subType) ? subType : [subType]);
   return tokens.filter(
     (token) =>
-      token.type === TokenType.NIP19 &&
-      token.metadata?.subType &&
-      subTypeSet.has(token.metadata.subType as NIP19SubType)
+      token.type === TokenType.NIP19 && subTypeSet.has(token.metadata.subType),
   );
 }
 
-// 個別のNIP19サブタイプ取得関数
 export function getNpubs(tokens: Token[]): Token[] {
   return filterNip19BySubType(tokens, NIP19SubType.NPUB);
 }
@@ -586,7 +793,7 @@ export function getNsecs(tokens: Token[]): Token[] {
 export function getNipIdentifiers(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.NIP_IDENTIFIER);
 }
-// 旧タイプ引用を取得する関数
+
 export function getLegacyReferences(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.LEGACY_REFERENCE);
 }
@@ -603,11 +810,10 @@ export function getHashtags(tokens: Token[]): Token[] {
   return filterTokens(tokens, TokenType.HASHTAG);
 }
 
-// tタグで検証されたハッシュタグのみを取得
 export function getValidatedHashtags(tokens: Token[]): Token[] {
   return tokens.filter(
     (token) =>
-      token.type === TokenType.HASHTAG && token.metadata?.validated === true
+      token.type === TokenType.HASHTAG && token.metadata.validated === true,
   );
 }
 
@@ -653,31 +859,4 @@ export function resetPatterns(): void {
     LEGACY_REFERENCE_PATTERN,
   ];
   allPatterns.forEach((pattern) => (pattern.lastIndex = 0));
-}
-
-// モジュール内キャッシュ
-const urlTypeCache = new Map<string, string>(); // cleanedUrl → "image"/"video"/...
-
-async function fetchUrlContentType(url: string): Promise<string | undefined> {
-  if (urlTypeCache.has(url)) {
-    return urlTypeCache.get(url);
-  }
-
-  try {
-    const res = await fetch(url, { method: "HEAD" });
-    const contentType = res.headers.get("Content-Type") || "";
-    let type: string | undefined;
-
-    if (contentType.startsWith("video/")) type = "video";
-    else if (contentType.startsWith("audio/")) type = "audio";
-    else if (contentType.startsWith("image/")) type = "image";
-
-    if (type) {
-      urlTypeCache.set(url, type); // 成功したものだけキャッシュ
-    }
-
-    return type;
-  } catch {
-    return undefined; // ネットワークエラー時はキャッシュしない
-  }
 }
