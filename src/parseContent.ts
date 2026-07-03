@@ -183,11 +183,12 @@ async function fetchUrlContentType(
   }
 }
 
-function extractHashtagsFromTags(tags: string[][]): Set<string> {
-  const hashtags = new Set<string>();
+function extractHashtagsFromTags(tags: string[][]): Map<string, string> {
+  const hashtags = new Map<string, string>();
   for (const tag of tags) {
     if (tag.length >= 2 && tag[0] === "t") {
-      hashtags.add(tag[1].toLowerCase());
+      const lowerTag = tag[1].toLowerCase();
+      hashtags.set(lowerTag, tag[1]);
     }
   }
   return hashtags;
@@ -322,8 +323,11 @@ function processPatterns(
   protectedRanges: Token[] = [],
   hashtagsFromTagsOnly: boolean = true,
 ): void {
-  const validHashtags = hashtagsFromTagsOnly
+  const validHashtagsMap = hashtagsFromTagsOnly
     ? extractHashtagsFromTags(tags)
+    : null;
+  const validHashtags = validHashtagsMap
+    ? new Set(validHashtagsMap.keys())
     : null;
 
   // NIP_IDENTIFIER
@@ -572,7 +576,13 @@ function processPatterns(
   }
 
   // HASHTAG
-  processHashtagPatterns(content, matches, protectedRanges, validHashtags);
+  processHashtagPatterns(
+    content,
+    matches,
+    protectedRanges,
+    validHashtags,
+    validHashtagsMap,
+  );
 }
 
 function processHashtagPatterns(
@@ -580,6 +590,7 @@ function processHashtagPatterns(
   matches: Token[],
   protectedRanges: Token[],
   validHashtags: Set<string> | null,
+  validHashtagsMap: Map<string, string> | null,
 ): void {
   const pattern = new RegExp(HASHTAG_PATTERN.source, HASHTAG_PATTERN.flags);
   let match: RegExpExecArray | null;
@@ -598,8 +609,16 @@ function processHashtagPatterns(
       continue;
     }
 
+    const tagValue =
+      validHashtagsMap?.get(hashtag.toLowerCase()) ?? hashtag.toLowerCase();
     matches.push(
-      createHashtagToken(match[0], start, end, hashtag, validHashtags !== null),
+      createHashtagToken(
+        match[0],
+        start,
+        end,
+        tagValue,
+        validHashtags !== null,
+      ),
     );
   }
 }

@@ -332,11 +332,11 @@ Tokens are **discriminated unions** - the `type` field determines which metadata
 ```typescript
 {
   type: "hashtag",
-  content: "#nostr",
+  content: "#Nostr",
   start: 0,
   end: 6,
   metadata: {
-    tag: "nostr",
+    tag: "nostr",  // normalized value (lowercase if from t tag, otherwise lowercase of content)
     validated: true  // true if matched with t tag
   }
 }
@@ -429,6 +429,7 @@ npm publish
 - Custom emoji handling: Both tagged and untagged emojis are now recognized
 - URL type detection restored with proper typing (`"image" | "video" | "audio"`)
 - Hashtag metadata now includes `validated` field to distinguish t-tag validated hashtags
+- Hashtag `tag` value is normalized: uses t-tag value when available, otherwise lowercase of content
 - Better discriminated union support for token filtering functions
 
 **Migration Guide:**
