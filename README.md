@@ -433,9 +433,6 @@ if (emoji.metadata.url) {
 
 // After (0.7.0)
 const emoji = tokens.find((t) => t.type === "custom_emoji");
-console.log(emoji.metadata.name);
-// After (0.7.0)
-const emoji = tokens.find((t) => t.type === "custom_emoji");
 console.log(emoji.metadata.name); // Always available
 if (emoji.metadata.hasMetadata) {
   // TypeScript knows url exists here
