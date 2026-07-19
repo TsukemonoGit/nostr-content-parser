@@ -138,7 +138,7 @@ export function findCustomEmojiMetadata(
   const emojiTag = tags.find(
     (tag) => tag[0] === "emoji" && tag[1] === emojiName,
   );
-  if (!emojiTag) return null;
+  if (!emojiTag || !emojiTag[2]) return null;
   return {
     url: emojiTag[2],
     emojiSetAddress: emojiTag[3],
