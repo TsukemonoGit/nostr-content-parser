@@ -81,22 +81,60 @@ describe("parseContent - Core Functionality", () => {
     const content = "Hello :pepe: world :unknown_emoji:";
     const tags = [["emoji", "pepe", "https://example.com/pepe.png"]];
     const tokens = parseContent(content, tags);
-    // タグありでもなしでもカスタム絵文字トークンを作成
     const customEmojis = tokens.filter(
       (t) => t.type === TokenType.CUSTOM_EMOJI,
     );
-    expect(customEmojis).toHaveLength(2);
+    // タグに一致するもののみCUSTOM_EMOJIトークンになる
+    expect(customEmojis).toHaveLength(1);
 
-    // タグあり
-    expect(customEmojis[0].metadata.hasMetadata).toBe(true);
-    if (customEmojis[0].metadata.hasMetadata) {
-      expect(customEmojis[0].metadata.url).toBe("https://example.com/pepe.png");
-      expect(customEmojis[0].metadata.name).toBe("pepe");
-    }
+    // タグあり（一致した絵文字）
+    expect(customEmojis[0].metadata.url).toBe("https://example.com/pepe.png");
+    expect(customEmojis[0].metadata.name).toBe("pepe");
+    expect(customEmojis[0].metadata.emojiSetAddress).toBeUndefined();
 
-    // タグなし
-    expect(customEmojis[1].metadata.hasMetadata).toBe(false);
-    expect(customEmojis[1].metadata.name).toBe("unknown_emoji");
+    // タグなしの絵文字はTEXTとして残る
+    const textTokens = tokens.filter((t) => t.type === TokenType.TEXT);
+    const unknownText = textTokens.find((t) =>
+      t.content.includes("unknown_emoji"),
+    );
+    expect(unknownText).toBeDefined();
+  });
+
+  it("should parse custom emoji with emoji-set-address (atag)", () => {
+    const content = "Hello :blobcat:";
+    const tags = [
+      [
+        "emoji",
+        "blobcat",
+        "https://example.com/blobcat.png",
+        "30030:79c2cae114ea28a981e7559b4fe7854a473521a8d22a66bbab9fa248eb820ff6:blobcats",
+      ],
+    ];
+    const tokens = parseContent(content, tags);
+    const customEmojis = tokens.filter(
+      (t) => t.type === TokenType.CUSTOM_EMOJI,
+    );
+    expect(customEmojis).toHaveLength(1);
+    expect(customEmojis[0].metadata.name).toBe("blobcat");
+    expect(customEmojis[0].metadata.url).toBe(
+      "https://example.com/blobcat.png",
+    );
+    expect(customEmojis[0].metadata.emojiSetAddress).toBe(
+      "30030:79c2cae114ea28a981e7559b4fe7854a473521a8d22a66bbab9fa248eb820ff6:blobcats",
+    );
+  });
+
+  it("should parse custom emoji without emoji-set-address", () => {
+    const content = "Hello :pepe:";
+    const tags = [["emoji", "pepe", "https://example.com/pepe.png"]];
+    const tokens = parseContent(content, tags);
+    const customEmojis = tokens.filter(
+      (t) => t.type === TokenType.CUSTOM_EMOJI,
+    );
+    expect(customEmojis).toHaveLength(1);
+    expect(customEmojis[0].metadata.name).toBe("pepe");
+    expect(customEmojis[0].metadata.url).toBe("https://example.com/pepe.png");
+    expect(customEmojis[0].metadata.emojiSetAddress).toBeUndefined();
   });
 
   it("should parse hashtags", () => {
