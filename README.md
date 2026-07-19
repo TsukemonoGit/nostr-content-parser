@@ -210,13 +210,15 @@ const tokens = parseContent(content, tags);
 const emojis = getCustomEmojis(tokens);
 emojis.forEach((emoji) => {
   console.log(`Name: ${emoji.metadata.name}`);
-  if (emoji.metadata.hasMetadata) {
-    // TypeScript knows url exists here
-    console.log(`URL: ${emoji.metadata.url}`);
-  } else {
-    console.log("No metadata found in tags");
+  console.log(`URL: ${emoji.metadata.url}`);
+  // Optional: emoji-set-address (NIP-30)
+  if (emoji.metadata.emojiSetAddress) {
+    console.log(`Emoji Set: ${emoji.metadata.emojiSetAddress}`);
   }
 });
+
+// Note: Only emojis with matching tags in `tags` are returned as CUSTOM_EMOJI.
+// :unknown: (no matching tag) becomes TEXT, not CUSTOM_EMOJI.
 ```
 
 ### Legacy References
@@ -281,7 +283,7 @@ Tokens are **discriminated unions** - the `type` field determines which metadata
 }
 ```
 
-**Custom Emoji Token (with metadata):**
+**Custom Emoji Token:**
 
 ```typescript
 {
@@ -292,25 +294,12 @@ Tokens are **discriminated unions** - the `type` field determines which metadata
   metadata: {
     name: "pepe",
     url: "https://example.com/pepe.png",
-    hasMetadata: true
+    emojiSetAddress: "30030:79c2...ff6:blobcats"  // Optional (NIP-30)
   }
 }
 ```
 
-**Custom Emoji Token (without metadata):**
-
-```typescript
-{
-  type: "custom_emoji",
-  content: ":unknown:",
-  start: 0,
-  end: 9,
-  metadata: {
-    name: "unknown",
-    hasMetadata: false
-  }
-}
-```
+**Note:** Only emojis with matching tags in the `tags` parameter are returned as `CUSTOM_EMOJI` tokens. Unmatched `:shortcode:` are returned as `TEXT` tokens instead.
 
 **URL Token:**
 
@@ -366,16 +355,17 @@ Version 0.7.0 introduces full TypeScript type safety with discriminated unions:
 ```typescript
 import { parseContent, TokenType } from "@konemono/nostr-content-parser";
 
-const tokens = parseContent("Hello :pepe:");
+const tokens = parseContent("Hello :pepe:", [["emoji", "pepe", "https://example.com/pepe.png"]]);
 
 tokens.forEach((token) => {
   if (token.type === TokenType.CUSTOM_EMOJI) {
     // TypeScript knows metadata structure here
-    console.log(token.metadata.name); // Always available
+    console.log(token.metadata.name);  // Always available
+    console.log(token.metadata.url);   // Always available (only matched emojis become CUSTOM_EMOJI)
 
-    if (token.metadata.hasMetadata) {
-      // TypeScript knows url exists here
-      console.log(token.metadata.url);
+    // Optional: emoji-set-address (NIP-30)
+    if (token.metadata.emojiSetAddress) {
+      console.log(token.metadata.emojiSetAddress);
     }
   }
 
@@ -426,7 +416,7 @@ npm publish
 
 **Improvements:**
 
-- Custom emoji handling: Both tagged and untagged emojis are now recognized
+- Custom emoji handling: Tagged emojis are recognized as `CUSTOM_EMOJI` tokens; untagged emojis become `TEXT`
 - URL type detection restored with proper typing (`"image" | "video" | "audio"`)
 - Hashtag metadata now includes `validated` field to distinguish t-tag validated hashtags
 - Hashtag `tag` value is normalized: uses t-tag value when available, otherwise lowercase of content
@@ -443,8 +433,30 @@ if (emoji.metadata.url) {
 
 // After (0.7.0)
 const emoji = tokens.find((t) => t.type === "custom_emoji");
+console.log(emoji.metadata.name);
+console.log(emoji.metadata.url);  // Always available
+```
+
+### 0.8.0 (Breaking Changes)
+
+**Custom Emoji Type Simplification:**
+
+- Removed `hasMetadata` discriminant from `custom_emoji` token type
+- `custom_emoji` is now a single type: `{ url: string; name: string; emojiSetAddress?: string }`
+- Only emojis with matching tags in `tags` are returned as `CUSTOM_EMOJI` tokens (untagged `:shortcode:` becomes `TEXT`)
+- Added `emojiSetAddress` field (NIP-30 emoji-set-address support)
+
+**Migration Guide:**
+
+```typescript
+// Before (0.7.x)
+const emoji = tokens.find((t) => t.type === "custom_emoji");
 if (emoji.metadata.hasMetadata) {
-  // TypeScript knows url exists here
   console.log(emoji.metadata.url);
 }
+
+// After (0.8.0)
+const emoji = tokens.find((t) => t.type === "custom_emoji");
+console.log(emoji.metadata.url);  // Always available
+console.log(emoji.metadata.emojiSetAddress);  // Optional (NIP-30)
 ```
