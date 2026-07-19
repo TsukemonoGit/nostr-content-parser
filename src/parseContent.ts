@@ -64,25 +64,16 @@ function createCustomEmojiToken(
   start: number,
   end: number,
   name: string,
-  url?: string,
+  url: string,
+  emojiSetAddress?: string,
 ): Token {
-  if (url) {
-    return {
-      type: TokenType.CUSTOM_EMOJI,
-      content,
-      start,
-      end,
-      metadata: { url, name, hasMetadata: true },
-    };
-  } else {
-    return {
-      type: TokenType.CUSTOM_EMOJI,
-      content,
-      start,
-      end,
-      metadata: { name, hasMetadata: false },
-    };
-  }
+  return {
+    type: TokenType.CUSTOM_EMOJI,
+    content,
+    start,
+    end,
+    metadata: { url, name, emojiSetAddress },
+  };
 }
 
 function createHashtagToken(
@@ -568,9 +559,18 @@ function processPatterns(
       const emojiName = match[1];
       const metadata = findCustomEmojiMetadata(emojiName, tags);
 
-      // タグありでもなしでもカスタム絵文字トークンを作成
+      // タグに一致しなかった場合はスキップ（TEXTとして扱われる）
+      if (!metadata) continue;
+
       matches.push(
-        createCustomEmojiToken(match[0], start, end, emojiName, metadata?.url),
+        createCustomEmojiToken(
+          match[0],
+          start,
+          end,
+          emojiName,
+          metadata.url,
+          metadata.emojiSetAddress,
+        ),
       );
     }
   }

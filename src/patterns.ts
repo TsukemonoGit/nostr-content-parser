@@ -60,11 +60,7 @@ export type Token =
     })
   | (TokenBase & {
       type: "custom_emoji";
-      metadata: { url: string; name: string; hasMetadata: true };
-    })
-  | (TokenBase & {
-      type: "custom_emoji";
-      metadata: { name: string; hasMetadata: false };
+      metadata: { url: string; name: string; emojiSetAddress?: string };
     })
   | (TokenBase & {
       type: "legacy_reference";
@@ -137,12 +133,16 @@ export function isLightningAddress(emailLike: string): boolean {
 export function findCustomEmojiMetadata(
   emojiName: string,
   tags: string[][],
-): { url: string } | null {
+): { url: string; emojiSetAddress?: string } | null {
   if (!tags) return null;
   const emojiTag = tags.find(
     (tag) => tag[0] === "emoji" && tag[1] === emojiName,
   );
-  return emojiTag ? { url: emojiTag[2] } : null;
+  if (!emojiTag || !emojiTag[2]) return null;
+  return {
+    url: emojiTag[2],
+    emojiSetAddress: emojiTag[3],
+  };
 }
 
 export const NIP19_PATTERNS = {
