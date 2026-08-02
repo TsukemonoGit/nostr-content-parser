@@ -418,5 +418,28 @@ describe("Utility Functions", () => {
     expect(cleanUrlEnd("http://nostr.com/path.note1.")).toBe(
       "http://nostr.com/path.note1",
     );
+
+    // URL全体が括弧で囲まれている場合
+    expect(cleanUrlEnd("(https://example.com)")).toBe("https://example.com");
+    expect(cleanUrlEnd("（https://example.com）")).toBe("https://example.com");
+
+    // URL途中に閉じ括弧が複数の場合
+    expect(cleanUrlEnd("https://example.com/(path(to))")).toBe(
+      "https://example.com/(path(to))",
+    );
+
+    // 開き括弧が過剰な場合
+    expect(cleanUrlEnd("https://example.com/path(((")).toBe(
+      "https://example.com/path",
+    );
+
+    // MS Learn URL（末尾のバージョン番号括弧）
+    expect(
+      cleanUrlEnd(
+        "https://learn.microsoft.com/ja-jp/previous-versions/direct-x/cc370952(v=msdn.10)",
+      ),
+    ).toBe(
+      "https://learn.microsoft.com/ja-jp/previous-versions/direct-x/cc370952(v=msdn.10)",
+    );
   });
 });
