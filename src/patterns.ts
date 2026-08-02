@@ -164,7 +164,7 @@ export const NIP19_PLAIN_PATTERNS = {
 };
 
 export const URL_PATTERN =
-  /(https?:\/\/(?:(?!https?:\/\/)[^\s"'<`])+(?:(?!https?:\/\/)[^\s"'<`:\.\ )\}\({])+)/g;
+  /(https?:\/\/(?:(?!https?:\/\/)[^\s"'<`])+(?:(?!https?:\/\/)[^\s"'<`:\.\({])+)/g;
 
 export const LN_URL_PATTERN = /lnurl1[02-9ac-hj-np-z]+/gi;
 export const LNBC_PATTERN = /lnbc[0-9]*[munp]?1[02-9ac-hj-np-z]+/gi;

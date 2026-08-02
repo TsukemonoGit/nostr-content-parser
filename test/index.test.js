@@ -421,6 +421,15 @@ describe("Utility Functions", () => {
   });
 
   it("url処理のエッジケース", () => {
+    // MS Learn URL（末尾のバージョン番号括弧）
+    expect(
+      parseContent(
+        "https://learn.microsoft.com/ja-jp/previous-versions/direct-x/cc370952(v=msdn.10)",
+      )[0].content,
+    ).toBe(
+      "https://learn.microsoft.com/ja-jp/previous-versions/direct-x/cc370952(v=msdn.10)",
+    );
+
     // URL全体が括弧で囲まれている場合
     expect(parseContent("(https://example.com)")[1].content).toBe(
       "https://example.com",
@@ -434,15 +443,6 @@ describe("Utility Functions", () => {
     // 開き括弧が過剰な場合
     expect(parseContent("https://example.com/path(((")[0].content).toBe(
       "https://example.com/path",
-    );
-
-    // MS Learn URL（末尾のバージョン番号括弧）
-    expect(
-      parseContent(
-        "https://learn.microsoft.com/ja-jp/previous-versions/direct-x/cc370952(v=msdn.10)",
-      )[0].content,
-    ).toBe(
-      "https://learn.microsoft.com/ja-jp/previous-versions/direct-x/cc370952(v=msdn.10)",
     );
   });
 });
